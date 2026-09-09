@@ -7,8 +7,13 @@ let package = Package(
     products: [
         .library(name: "RichmanGameUI", targets: ["RichmanGameUI"])
     ],
+    dependencies: [
+        .package(path: "../RichmanCore"),
+        .package(path: "../RichmanCityData"),
+        .package(path: "../RichmanAssetsKit")
+    ],
     targets: [
-        .target(name: "RichmanGameUI"),
+        .target(name: "RichmanGameUI", dependencies: ["RichmanCore", "RichmanCityData", "RichmanAssetsKit"]),
         .testTarget(name: "RichmanGameUITests", dependencies: ["RichmanGameUI"])
     ]
 )
