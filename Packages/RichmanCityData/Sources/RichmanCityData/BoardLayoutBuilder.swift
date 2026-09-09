@@ -2,29 +2,25 @@ import Foundation
 import RichmanCore
 
 /// Turns a flat list of OSM places into a `Board` shaped by
-/// `BoardTemplate.classicSlotOrder`, so it slots into `GameState` exactly
-/// like `StandardBoard.classic40Tile()` does — just with real names.
+/// `BoardTemplate.classicSlotOrder` (so it slots into `GameState` exactly
+/// like `StandardBoard.classic40Tile()` does, just with real names) *and*
+/// lays every tile out at a real `TileMapPosition`, so the board renders as
+/// a path tracing the city's actual shape instead of a square — see
+/// `Docs/CITY_DATA.md`.
 enum BoardLayoutBuilder {
     static func makeBoard(center: (lat: Double, lon: Double), places: [OverpassPlace]) -> Board {
-        let propertyNames = pad(
-            rankedRoadNames(from: places, center: center),
-            to: BoardTemplate.propertyCount,
-            fallbackPrefix: "Local Road"
-        )
-        let stationNames = pad(
-            rankedStationNames(from: places, center: center),
-            to: BoardTemplate.transitCount,
-            fallbackPrefix: "Local Transit Stop"
-        )
-        let landmarkNames = pad(
-            rankedLandmarkNames(from: places, center: center),
-            to: BoardTemplate.utilityCount,
-            fallbackPrefix: "Landmark"
-        )
+        let roads = angleSortedPlaces(places, center: center) { if case .road = $0 { return true }; return false }
+        let stations = angleSortedPlaces(places, center: center) { if case .station = $0 { return true }; return false }
+        let landmarks = angleSortedPlaces(places, center: center) { if case .landmark = $0 { return true }; return false }
 
-        var propertyIndex = 0
-        var stationIndex = 0
-        var landmarkIndex = 0
+        var roadIterator = roads.makeIterator()
+        var stationIterator = stations.makeIterator()
+        var landmarkIterator = landmarks.makeIterator()
+        var roadPadCount = 0
+        var stationPadCount = 0
+        var landmarkPadCount = 0
+        var propertyNamesInOrder: [String] = []
+        var coordinates: [Int: (lat: Double, lon: Double)] = [:]
 
         let tiles: [Tile] = BoardTemplate.classicSlotOrder.enumerated().map { position, slot in
             switch slot {
@@ -39,77 +35,211 @@ enum BoardLayoutBuilder {
             case .communityChest:
                 return Tile(id: position, name: "Community Chest", category: .communityChest)
             case .transit:
-                defer { stationIndex += 1 }
-                return Tile(id: position, name: stationNames[stationIndex], category: .transit(BoardTemplate.transitDetails()))
+                let name: String
+                if let station = stationIterator.next() {
+                    coordinates[position] = (station.lat, station.lon)
+                    name = station.name
+                } else {
+                    stationPadCount += 1
+                    name = "Local Transit Stop \(stationPadCount)"
+                }
+                return Tile(id: position, name: name, category: .transit(BoardTemplate.transitDetails()))
             case .utility:
-                defer { landmarkIndex += 1 }
-                return Tile(id: position, name: landmarkNames[landmarkIndex], category: .utility(BoardTemplate.utilityDetails()))
+                let name: String
+                if let landmark = landmarkIterator.next() {
+                    coordinates[position] = (landmark.lat, landmark.lon)
+                    name = landmark.name
+                } else {
+                    landmarkPadCount += 1
+                    name = "Landmark \(landmarkPadCount)"
+                }
+                return Tile(id: position, name: name, category: .utility(BoardTemplate.utilityDetails()))
             case .property(let group, let indexInGroup):
-                defer { propertyIndex += 1 }
-                let name = propertyNames[propertyIndex]
+                let name: String
+                if let road = roadIterator.next() {
+                    coordinates[position] = (road.lat, road.lon)
+                    name = road.name
+                } else {
+                    roadPadCount += 1
+                    name = "Local Road \(roadPadCount)"
+                }
+                propertyNamesInOrder.append(name)
                 return Tile(id: position, name: name, category: .property(
-                    BoardTemplate.propertyDetails(colorGroupName: colorGroupLabel(group: group, names: propertyNames), group: group, indexInGroup: indexInGroup)
+                    BoardTemplate.propertyDetails(
+                        colorGroupName: colorGroupLabel(group: group, names: propertyNamesInOrder),
+                        group: group,
+                        indexInGroup: indexInGroup
+                    )
                 ))
             }
         }
-        return Board(tiles: tiles)
-    }
 
-    /// Distinct road names, farthest-from-center first (so the classic
-    /// "cheap tiles near Go, expensive tiles near the far corner" pricing
-    /// ramp puts a real dollar premium on the city center — same idea the
-    /// original 大富翁 boards use with landmark clustering).
-    private static func rankedRoadNames(from places: [OverpassPlace], center: (lat: Double, lon: Double)) -> [String] {
-        let roads = places.compactMap { place -> (name: String, distance: Double)? in
-            guard case .road = place.kind else { return nil }
-            return (place.name, distance(from: center, to: (place.latitude, place.longitude)))
+        let knownPositions = normalizedPositions(from: coordinates)
+        let interpolated = interpolatedPositions(for: tiles.count, known: knownPositions)
+        let allPositions = decluttered(interpolated)
+        let placedTiles = tiles.map { tile -> Tile in
+            var placed = tile
+            placed.mapPosition = allPositions[tile.id]
+            return placed
         }
-        return dedupeFarthestFirst(roads)
+        return Board(tiles: placedTiles)
     }
 
-    private static func rankedStationNames(from places: [OverpassPlace], center: (lat: Double, lon: Double)) -> [String] {
-        let stations = places.compactMap { place -> (name: String, distance: Double)? in
-            guard case .station = place.kind else { return nil }
-            return (place.name, distance(from: center, to: (place.latitude, place.longitude)))
-        }
-        // Major stations tend to cluster centrally — closest first.
-        return dedupeClosestFirst(stations)
-    }
-
-    private static func rankedLandmarkNames(from places: [OverpassPlace], center: (lat: Double, lon: Double)) -> [String] {
-        let landmarks = places.compactMap { place -> (name: String, distance: Double)? in
-            guard case .landmark = place.kind else { return nil }
-            return (place.name, distance(from: center, to: (place.latitude, place.longitude)))
-        }
-        return dedupeClosestFirst(landmarks)
-    }
-
-    private static func dedupeFarthestFirst(_ items: [(name: String, distance: Double)]) -> [String] {
-        dedupe(items).sorted { $0.distance > $1.distance }.map(\.name)
-    }
-
-    private static func dedupeClosestFirst(_ items: [(name: String, distance: Double)]) -> [String] {
-        dedupe(items).sorted { $0.distance < $1.distance }.map(\.name)
-    }
-
-    private static func dedupe(_ items: [(name: String, distance: Double)]) -> [(name: String, distance: Double)] {
+    /// Distinct places of one kind, ordered by polar angle around `center`
+    /// (arbitrary start angle, increasing counter-clockwise). Walking the
+    /// board's fixed slot order while popping from this list in order
+    /// produces a path that hugs the outer boundary of the selected
+    /// points — a cheap stand-in for real road-network routing.
+    private static func angleSortedPlaces(
+        _ places: [OverpassPlace],
+        center: (lat: Double, lon: Double),
+        matching predicate: (OverpassPlace.Kind) -> Bool
+    ) -> [(name: String, lat: Double, lon: Double)] {
         var seen = Set<String>()
-        var result: [(name: String, distance: Double)] = []
-        for item in items where !seen.contains(item.name.lowercased()) {
-            seen.insert(item.name.lowercased())
-            result.append(item)
+        var result: [(name: String, lat: Double, lon: Double, angle: Double)] = []
+        for place in places where predicate(place.kind) {
+            let key = place.name.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            let bearing = angle(from: center, to: (place.latitude, place.longitude))
+            result.append((place.name, place.latitude, place.longitude, bearing))
+        }
+        return result.sorted { $0.angle < $1.angle }.map { ($0.name, $0.lat, $0.lon) }
+    }
+
+    /// Bearing from `center` to `point`, in `0..<2π`. Flat-earth approximation
+    /// with the standard `cos(lat)` longitude correction — plenty accurate at
+    /// city scale and keeps this package free of CoreLocation/MapKit.
+    private static func angle(from center: (lat: Double, lon: Double), to point: (Double, Double)) -> Double {
+        let dx = (point.1 - center.lon) * cos(center.lat * .pi / 180)
+        let dy = point.0 - center.lat
+        let raw = atan2(dy, dx)
+        return raw < 0 ? raw + 2 * .pi : raw
+    }
+
+    /// Maps real (lat, lon) coordinates onto a 0...1 square, preserving the
+    /// real aspect ratio (a tall city stays tall, not stretched square) by
+    /// fitting the larger dimension to 0...1 and centering the other.
+    private static func normalizedPositions(from coordinates: [Int: (lat: Double, lon: Double)]) -> [Int: TileMapPosition] {
+        guard !coordinates.isEmpty else { return [:] }
+        let lats = coordinates.values.map(\.lat)
+        let lons = coordinates.values.map(\.lon)
+        let minLat = lats.min()!, maxLat = lats.max()!
+        let minLon = lons.min()!, maxLon = lons.max()!
+        let lonScale = cos((minLat + maxLat) / 2 * .pi / 180)
+
+        let width = max((maxLon - minLon) * lonScale, 0.000_001)
+        let height = max(maxLat - minLat, 0.000_001)
+        let side = max(width, height)
+        let xInset = (side - width) / 2
+        let yInset = (side - height) / 2
+
+        var result: [Int: TileMapPosition] = [:]
+        for (index, coordinate) in coordinates {
+            let x = ((coordinate.lon - minLon) * lonScale + xInset) / side
+            // Flip: higher latitude (further north) renders nearer the top.
+            let y = ((maxLat - coordinate.lat) + yInset) / side
+            result[index] = TileMapPosition(x: x, y: y)
         }
         return result
     }
 
-    private static func pad(_ names: [String], to count: Int, fallbackPrefix: String) -> [String] {
-        var result = Array(names.prefix(count))
-        var n = result.count + 1
-        while result.count < count {
-            result.append("\(fallbackPrefix) \(n)")
-            n += 1
+    /// Fills every tile index without a real position (padded properties,
+    /// and every generic tile — Go, Jail, Chance, etc.) by linearly
+    /// interpolating between the nearest real positions before and after it
+    /// (by board index, wrapping around), so the path is continuous.
+    private static func interpolatedPositions(for tileCount: Int, known: [Int: TileMapPosition]) -> [Int: TileMapPosition] {
+        guard !known.isEmpty else { return [:] }
+        var result = known
+        for index in 0..<tileCount where known[index] == nil {
+            var before = (index - 1 + tileCount) % tileCount
+            var stepsBefore = 1
+            while known[before] == nil {
+                before = (before - 1 + tileCount) % tileCount
+                stepsBefore += 1
+            }
+            var after = (index + 1) % tileCount
+            var stepsAfter = 1
+            while known[after] == nil {
+                after = (after + 1) % tileCount
+                stepsAfter += 1
+            }
+            let beforePosition = known[before]!
+            let afterPosition = known[after]!
+            let fraction = Double(stepsBefore) / Double(stepsBefore + stepsAfter)
+            result[index] = TileMapPosition(
+                x: beforePosition.x + (afterPosition.x - beforePosition.x) * fraction,
+                y: beforePosition.y + (afterPosition.y - beforePosition.y) * fraction
+            )
         }
         return result
+    }
+
+    /// Real coordinates can put several tiles very close together (dense
+    /// downtown blocks vs. a sprawling suburb) — too close for a fixed-size
+    /// tile chip to render without overlapping. This nudges any pair closer
+    /// than `minDistance` apart, a few passes of simple pairwise repulsion,
+    /// then re-fits everything back into 0...1 (with a small margin so edge
+    /// tiles aren't clipped). Small-scale local declutter, not a reshape —
+    /// the overall path still traces the real geography.
+    private static func decluttered(
+        _ positions: [Int: TileMapPosition],
+        minDistance: Double = 0.13,
+        iterations: Int = 80
+    ) -> [Int: TileMapPosition] {
+        guard positions.count > 1 else { return positions }
+        var points = positions
+        let ids = Array(points.keys)
+
+        for _ in 0..<iterations {
+            var movedAny = false
+            for i in 0..<ids.count {
+                for j in (i + 1)..<ids.count {
+                    guard var a = points[ids[i]], var b = points[ids[j]] else { continue }
+                    let dx = b.x - a.x
+                    let dy = b.y - a.y
+                    let distance = (dx * dx + dy * dy).squareRoot()
+                    guard distance < minDistance else { continue }
+                    movedAny = true
+                    if distance < 0.000_001 {
+                        // Exactly coincident — nudge deterministically so the next pass has a direction to push along.
+                        b.x += minDistance / 2
+                    } else {
+                        let push = (minDistance - distance) / 2
+                        let ux = dx / distance, uy = dy / distance
+                        a.x -= ux * push; a.y -= uy * push
+                        b.x += ux * push; b.y += uy * push
+                    }
+                    points[ids[i]] = a
+                    points[ids[j]] = b
+                }
+            }
+            if !movedAny { break }
+        }
+
+        return refit(points)
+    }
+
+    /// Rescales an arbitrary set of positions back into `0...1` (preserving
+    /// relative layout, not aspect ratio — the declutter pass can shift the
+    /// bounding box's proportions slightly), with a small margin so a tile
+    /// chip centered at an edge position doesn't get clipped.
+    private static func refit(_ positions: [Int: TileMapPosition], margin: Double = 0.05) -> [Int: TileMapPosition] {
+        guard !positions.isEmpty else { return positions }
+        let xs = positions.values.map(\.x)
+        let ys = positions.values.map(\.y)
+        let minX = xs.min()!, maxX = xs.max()!
+        let minY = ys.min()!, maxY = ys.max()!
+        let width = max(maxX - minX, 0.000_001)
+        let height = max(maxY - minY, 0.000_001)
+        let usable = 1 - margin * 2
+
+        return positions.mapValues { position in
+            TileMapPosition(
+                x: margin + (position.x - minX) / width * usable,
+                y: margin + (position.y - minY) / height * usable
+            )
+        }
     }
 
     /// Names a color group after its first property (e.g. two adjacent tiles
@@ -118,13 +248,5 @@ enum BoardLayoutBuilder {
         let sizes = BoardTemplate.colorGroupSizes
         let start = sizes.prefix(group).reduce(0, +)
         return names.indices.contains(start) ? "\(names[start]) District" : "District \(group + 1)"
-    }
-
-    /// Flat-earth approximation — plenty accurate at city scale and avoids
-    /// pulling in CoreLocation (keeps this package UIKit/CoreLocation-free).
-    private static func distance(from a: (lat: Double, lon: Double), to b: (Double, Double)) -> Double {
-        let dLat = a.lat - b.0
-        let dLon = (a.lon - b.1) * cos(a.lat * .pi / 180)
-        return (dLat * dLat + dLon * dLon).squareRoot()
     }
 }

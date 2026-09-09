@@ -34,6 +34,45 @@ final class RichmanCityDataTests: XCTestCase {
         XCTAssertTrue(utilityTiles.allSatisfy { $0.name.hasPrefix("Landmark ") })
     }
 
+    func testMakeBoardAssignsAMapPositionToEveryTile() {
+        var places: [OverpassPlace] = []
+        for i in 0..<30 {
+            places.append(OverpassPlace(name: "Road \(i)", kind: .road(highwayClass: "primary"), latitude: Double(i) * 0.01, longitude: Double(i) * 0.005))
+        }
+        for i in 0..<5 {
+            places.append(OverpassPlace(name: "Station \(i)", kind: .station, latitude: Double(i) * 0.01, longitude: 0.01))
+        }
+        for i in 0..<3 {
+            places.append(OverpassPlace(name: "Landmark \(i)", kind: .landmark, latitude: Double(i) * 0.01, longitude: 0.02))
+        }
+
+        let board = BoardLayoutBuilder.makeBoard(center: (lat: 0.1, lon: 0.05), places: places)
+
+        XCTAssertEqual(board.tiles.count, 40)
+        for tile in board.tiles {
+            guard let position = tile.mapPosition else {
+                XCTFail("tile \(tile.id) (\(tile.name)) has no mapPosition")
+                continue
+            }
+            XCTAssertTrue((0...1).contains(position.x), "x out of range for tile \(tile.id): \(position.x)")
+            XCTAssertTrue((0...1).contains(position.y), "y out of range for tile \(tile.id): \(position.y)")
+        }
+    }
+
+    func testMakeBoardInterpolatesPositionsForPaddedAndGenericTiles() {
+        // Only 2 real roads and nothing else — every other tile (padded
+        // properties/stations/utilities, plus every generic tile) must still
+        // get an interpolated position so the path has no gaps.
+        let places = [
+            OverpassPlace(name: "Only Road A", kind: .road(highwayClass: "primary"), latitude: 0, longitude: 0),
+            OverpassPlace(name: "Only Road B", kind: .road(highwayClass: "secondary"), latitude: 0.02, longitude: 0.01)
+        ]
+
+        let board = BoardLayoutBuilder.makeBoard(center: (lat: 0, lon: 0), places: places)
+
+        XCTAssertTrue(board.tiles.allSatisfy { $0.mapPosition != nil })
+    }
+
     func testMakeBoardPadsWhenTooFewRealPlacesAreFound() {
         // Only 2 roads, 0 stations, 0 landmarks — the builder must still produce
         // a complete, playable 40-tile board.
