@@ -61,6 +61,42 @@ final class RichmanGameUITests: XCTestCase {
         }
     }
 
+    func testRouteColorsAreDistinctForConsecutiveTilesAndStableForTheSameIndex() {
+        let colors = (0..<40).map { RouteGeometry.routeColor(forTileIndex: $0) }
+        // Same index always yields the same color (deterministic, not random).
+        XCTAssertEqual(RouteGeometry.routeColor(forTileIndex: 17), colors[17])
+        // Consecutive indices (the common case — they're the ones drawn next
+        // to each other) must not resolve to the exact same color.
+        for index in 0..<(colors.count - 1) {
+            XCTAssertNotEqual(colors[index], colors[index + 1], "tiles \(index) and \(index + 1) got the same route color")
+        }
+    }
+
+    func testIntermediateStopsAreEmptyForShortSegments() {
+        let stops = RouteGeometry.intermediateStops(
+            from: CGPoint(x: 0, y: 0),
+            to: CGPoint(x: 10, y: 0),
+            spacing: 40
+        )
+        XCTAssertTrue(stops.isEmpty)
+    }
+
+    func testIntermediateStopsAppearAndStayOnPathForLongSegments() {
+        let start = CGPoint(x: 0, y: 0)
+        let end = CGPoint(x: 300, y: 0)
+        let spacing: CGFloat = 40
+
+        let stops = RouteGeometry.intermediateStops(from: start, to: end, spacing: spacing)
+
+        XCTAssertFalse(stops.isEmpty, "a 300pt leg with 40pt spacing should get intermediate stops")
+        for stop in stops {
+            XCTAssertTrue((0...300).contains(stop.x), "stop \(stop) fell outside the segment")
+            XCTAssertEqual(stop.y, 0, accuracy: 0.01, "stop \(stop) drifted off this horizontal segment")
+        }
+        // Stops should be in increasing order along the path, not clustered or reversed.
+        XCTAssertEqual(stops.map(\.x), stops.map(\.x).sorted())
+    }
+
     // MARK: - GameViewModel
 
     func testStartGameWithNoCityUsesStandardBoard() async {
