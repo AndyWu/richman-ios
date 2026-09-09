@@ -1,34 +1,20 @@
 import SwiftUI
-import RichmanCore
 import RichmanCityData
-import RichmanAssetsKit
 import RichmanPersistence
 import RichmanGameUI
 
-/// Scaffold placeholder. Replaced by the real board/menu flow once
-/// RichmanGameUI is implemented (see Docs/ARCHITECTURE.md).
+/// Composition root: wires the real `CityDataProvider` stack (bundled demo
+/// cities first, then a live OSM fetch for anything else, all cached to
+/// disk) and hands it to `GameRootView`. See `Docs/ARCHITECTURE.md`.
 struct RootView: View {
-    private let linkedModules = [
-        RichmanCore.moduleName,
-        RichmanCityData.moduleName,
-        RichmanAssetsKit.moduleName,
-        RichmanPersistence.moduleName,
-        RichmanGameUI.moduleName
-    ]
-
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Richman")
-                .font(.largeTitle.bold())
-            Text("Scaffold build — modules linked:")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            ForEach(linkedModules, id: \.self) { name in
-                Text(name)
-                    .font(.caption.monospaced())
-            }
-        }
-        .padding()
+        GameRootView(cityDataProvider: Self.makeCityDataProvider())
+    }
+
+    private static func makeCityDataProvider() -> CityDataProvider {
+        let live = OSMCityDataProvider()
+        let withBundledFallback = BundledCityDataProvider(fallback: live)
+        return CachingCityDataProvider(upstream: withBundledFallback)
     }
 }
 
