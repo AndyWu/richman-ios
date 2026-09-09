@@ -23,7 +23,7 @@ Requires Xcode (full install, not just Command Line Tools) and [XcodeGen](https:
 
 ```bash
 brew install xcodegen
-xcodegen generate
+xcodegen generate -p App
 open App/RichmanApp.xcodeproj
 ```
 
