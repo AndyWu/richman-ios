@@ -23,6 +23,7 @@ public struct BoardView<CenterContent: View>: View {
     let centerContent: () -> CenterContent
 
     private let geoTileSize: CGFloat = 38
+    private let routeThickness: CGFloat = 12
 
     public init(
         board: Board,
@@ -118,7 +119,7 @@ public struct BoardView<CenterContent: View>: View {
             let size = proxy.size
             ZStack(alignment: .topLeading) {
                 pathShape(in: size)
-                    .stroke(Color.secondary.opacity(0.6), style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [1, 6]))
+                    .stroke(Color.blue.opacity(0.4), style: StrokeStyle(lineWidth: routeThickness, lineCap: .round, lineJoin: .round))
                 ForEach(board.tiles) { tile in
                     geoTileView(for: tile, in: size)
                 }
@@ -136,7 +137,9 @@ public struct BoardView<CenterContent: View>: View {
     }
 
     /// The connecting "road": a closed loop through every tile's real
-    /// position, in board order — the classic 大富翁-style path shape.
+    /// position, in board order — the classic 大富翁-style path shape, drawn
+    /// as a Tube-map-style route (horizontal, vertical, or 45° segments
+    /// only; see `octilinearWaypoints`).
     private func pathShape(in size: CGSize) -> Path {
         var path = Path()
         let points = board.tiles.compactMap { tile -> CGPoint? in
@@ -145,10 +148,13 @@ public struct BoardView<CenterContent: View>: View {
         }
         guard let first = points.first else { return path }
         path.move(to: first)
-        for point in points.dropFirst() {
-            path.addLine(to: point)
+        for index in points.indices {
+            let start = points[index]
+            let end = points[(index + 1) % points.count]
+            for waypoint in RouteGeometry.octilinearWaypoints(from: start, to: end) {
+                path.addLine(to: waypoint)
+            }
         }
-        path.closeSubpath()
         return path
     }
 
@@ -206,5 +212,39 @@ public struct BoardView<CenterContent: View>: View {
               let index = players.firstIndex(where: { $0.id == ownerID })
         else { return nil }
         return assetProvider.tokenColor(for: index)
+    }
+}
+
+/// Path schematization for the geo board: turns arbitrary real positions
+/// into Tube-map-clean segments. `internal` (not nested in `BoardView`) so
+/// `RichmanGameUITests` can verify `octilinearWaypoints` directly without a
+/// generic type parameter.
+enum RouteGeometry {
+    /// Two real tile positions rarely lie exactly horizontal, vertical, or
+    /// 45° apart. Rather than plotting the direct line (any angle) or
+    /// snapping every tile onto a rigid grid (tried, and looked like an
+    /// artificial 8-spoke star, not the city), this keeps each tile's real
+    /// position and instead inserts one bend between two tiles whenever
+    /// their direct line isn't already one of those angles — a diagonal run
+    /// covering however much of the gap is shared between both axes, then a
+    /// straight run covering the rest. Any two points can always be
+    /// connected this way with exactly one bend, so every segment actually
+    /// drawn is a clean Tube-map angle while the tiles themselves still sit
+    /// at their real, organically-shaped positions.
+    ///
+    /// Returns the waypoints to draw a line through *after* `start`
+    /// (i.e. `[end]` when already clean, or `[bend, end]`).
+    static func octilinearWaypoints(from start: CGPoint, to end: CGPoint) -> [CGPoint] {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let isAlreadyClean = dx == 0 || dy == 0 || abs(abs(dx) - abs(dy)) < 0.5
+        guard !isAlreadyClean else { return [end] }
+
+        let diagonal = min(abs(dx), abs(dy))
+        let bend = CGPoint(
+            x: start.x + (dx < 0 ? -diagonal : diagonal),
+            y: start.y + (dy < 0 ? -diagonal : diagonal)
+        )
+        return [bend, end]
     }
 }
