@@ -23,8 +23,8 @@ Requires Xcode (full install, not just Command Line Tools) and [XcodeGen](https:
 
 ```bash
 brew install xcodegen
-xcodegen generate -p App
-open App/RichmanApp.xcodeproj
+xcodegen generate
+open RichmanApp.xcodeproj
 ```
 
 Each package under `Packages/` is a standalone Swift package and can be built/tested independently without opening Xcode:

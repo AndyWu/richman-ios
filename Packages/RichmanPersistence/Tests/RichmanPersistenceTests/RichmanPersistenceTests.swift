@@ -50,7 +50,7 @@ final class RichmanPersistenceTests: XCTestCase {
 
     func testSlotsAreIndependent() throws {
         let store = GameStateStore(directory: tempDirectory)
-        let stateA = GameState.newGame(board: StandardBoard.classic40Tile(), playerNames: ["A"])
+        let stateA = GameState.newGame(board: StandardBoard.classic40Tile(), playerNames: ["A", "Z"])
         let stateB = GameState.newGame(board: StandardBoard.classic40Tile(), playerNames: ["B", "C"])
 
         try store.save(stateA, slot: "slotA")

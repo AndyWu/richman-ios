@@ -9,7 +9,7 @@ This repo is deliberately structured so multiple people or AI tools can work in 
 - **One logical change per PR.** If you're adding both a game rule and a UI screen, that's two PRs.
 - **Every PR must build and pass tests before you open it** — see "Building and testing" below. Don't rely on CI to find compile errors you could've caught locally.
 - **Stay inside your module's boundary** (see [`ARCHITECTURE.md`](ARCHITECTURE.md)). If you find yourself wanting to `import SwiftUI` in `RichmanCore`, stop — that logic belongs in `RichmanGameUI` instead, talking to `RichmanCore` through its public types.
-- **Don't hand-edit `App/RichmanApp.xcodeproj`.** It's generated from `project.yml` by XcodeGen. Edit `project.yml` and run `xcodegen generate`. (The generated `.xcodeproj` is gitignored — don't fight the ignore rule.)
+- **Don't hand-edit `RichmanApp.xcodeproj`.** It's generated from `project.yml` by XcodeGen. Edit `project.yml` and run `xcodegen generate`. (The generated `.xcodeproj` is gitignored — don't fight the ignore rule.)
 
 ## Building and testing
 
@@ -27,8 +27,8 @@ If you're changing `RichmanGameUI` or `App/`, you need full Xcode (not just Comm
 
 ```bash
 brew install xcodegen   # once
-xcodegen generate -p App
-open App/RichmanApp.xcodeproj
+xcodegen generate
+open RichmanApp.xcodeproj
 ```
 
 Then build/run the `RichmanApp` scheme on an iOS Simulator.

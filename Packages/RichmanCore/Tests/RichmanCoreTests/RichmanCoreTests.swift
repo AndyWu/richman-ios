@@ -104,7 +104,7 @@ final class RichmanCoreTests: XCTestCase {
     func testBuildHouseRequiresFullColorGroupAndEvenBuilding() {
         var state = GameState(
             board: TestBoard.make(),
-            players: [Player(name: "A", cash: 1_500)],
+            players: [Player(name: "A", cash: 1_500), Player(name: "B", cash: 1_500)],
             chanceDeck: CardDeck(cards: [.collect(0)]),
             communityChestDeck: CardDeck(cards: [.collect(0)])
         )
@@ -130,7 +130,7 @@ final class RichmanCoreTests: XCTestCase {
     func testBuildHouseFailsWithoutOwningWholeGroup() {
         var state = GameState(
             board: TestBoard.make(),
-            players: [Player(name: "A", cash: 1_500)],
+            players: [Player(name: "A", cash: 1_500), Player(name: "B", cash: 1_500)],
             chanceDeck: CardDeck(cards: [.collect(0)]),
             communityChestDeck: CardDeck(cards: [.collect(0)])
         )

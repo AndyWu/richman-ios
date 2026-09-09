@@ -42,8 +42,11 @@ public struct GameRootView: View {
                 .padding(.horizontal)
 
             eventLogView
+
+            Spacer(minLength: 0)
         }
         .padding()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .overlay {
             if let tileID = viewModel.pendingPurchaseTileID, let price = viewModel.pendingPurchasePrice {
                 PropertyDialogView(
