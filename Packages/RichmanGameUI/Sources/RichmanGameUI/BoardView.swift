@@ -118,8 +118,20 @@ public struct BoardView<CenterContent: View>: View {
         GeometryReader { proxy in
             let size = proxy.size
             ZStack(alignment: .topLeading) {
-                pathShape(in: size)
-                    .stroke(Color.blue.opacity(0.4), style: StrokeStyle(lineWidth: routeThickness, lineCap: .round, lineJoin: .round))
+                ForEach(routeSegments(in: size)) { segment in
+                    segment.path.stroke(
+                        segment.color.opacity(0.55),
+                        style: StrokeStyle(lineWidth: routeThickness, lineCap: .round, lineJoin: .round)
+                    )
+                    ForEach(Array(segment.stops.enumerated()), id: \.offset) { _, stop in
+                        Circle()
+                            .fill(segment.color)
+                            .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                            .frame(width: routeThickness * 0.7, height: routeThickness * 0.7)
+                            .position(stop)
+                            .allowsHitTesting(false)
+                    }
+                }
                 ForEach(board.tiles) { tile in
                     geoTileView(for: tile, in: size)
                 }
@@ -136,26 +148,44 @@ public struct BoardView<CenterContent: View>: View {
         }
     }
 
-    /// The connecting "road": a closed loop through every tile's real
-    /// position, in board order — the classic 大富翁-style path shape, drawn
-    /// as a Tube-map-style route (horizontal, vertical, or 45° segments
-    /// only; see `octilinearWaypoints`).
-    private func pathShape(in size: CGSize) -> Path {
-        var path = Path()
+    /// One drawable piece of "road" per tile — the leg leaving that tile and
+    /// heading to the next one in board order (wrapping from the last tile
+    /// back to Go), each its own color so the route reads as a network of
+    /// distinct named streets (Tube-map style) rather than one long line.
+    private struct RouteSegment: Identifiable {
+        let id: Int
+        let path: Path
+        let color: Color
+        let stops: [CGPoint]
+    }
+
+    private func routeSegments(in size: CGSize) -> [RouteSegment] {
         let points = board.tiles.compactMap { tile -> CGPoint? in
             guard let position = tile.mapPosition else { return nil }
             return CGPoint(x: position.x * size.width, y: position.y * size.height)
         }
-        guard let first = points.first else { return path }
-        path.move(to: first)
-        for index in points.indices {
+        guard points.count == board.tiles.count else { return [] }
+
+        return points.indices.map { index in
             let start = points[index]
             let end = points[(index + 1) % points.count]
+
+            var path = Path()
+            path.move(to: start)
             for waypoint in RouteGeometry.octilinearWaypoints(from: start, to: end) {
                 path.addLine(to: waypoint)
             }
+
+            return RouteSegment(
+                id: index,
+                path: path,
+                color: RouteGeometry.routeColor(forTileIndex: index),
+                // A little over two tile-widths of empty road before a stop appears —
+                // short hops between neighboring tiles stay bare, only genuinely long
+                // real-world gaps get intermediate stops.
+                stops: RouteGeometry.intermediateStops(from: start, to: end, spacing: geoTileSize * 2.2)
+            )
         }
-        return path
     }
 
     @ViewBuilder
@@ -246,5 +276,54 @@ enum RouteGeometry {
             y: start.y + (dy < 0 ? -diagonal : diagonal)
         )
         return [bend, end]
+    }
+
+    /// A distinct, deterministic color per tile index, stepped by the golden
+    /// angle (≈137.5°) rather than dividing the wheel evenly — evenly-spaced
+    /// hues put *adjacent* indices close together on the wheel (e.g. 40 tiles
+    /// evenly spaced are only 9° apart), which is exactly the pair that ends
+    /// up next to each other on screen. The golden angle keeps consecutive
+    /// indices visually distinct no matter how many tiles there are.
+    static func routeColor(forTileIndex index: Int) -> Color {
+        let goldenAngle = 137.508
+        let hue = (Double(index) * goldenAngle).truncatingRemainder(dividingBy: 360) / 360
+        return Color(hue: hue, saturation: 0.55, brightness: 0.8)
+    }
+
+    /// Visual-only waypoints along a route leg for genuinely long real-world
+    /// gaps between two tiles — real geography can put two consecutive tiles
+    /// far enough apart that an unbroken line reads as empty track; a few
+    /// evenly-spaced stops (not real board tiles — purely decorative) keep
+    /// a long leg feeling populated the way an actual transit line does.
+    /// Short/typical gaps (under ~2 spacing units) get none.
+    static func intermediateStops(from start: CGPoint, to end: CGPoint, spacing: CGFloat) -> [CGPoint] {
+        guard spacing > 0 else { return [] }
+        let waypoints = [start] + octilinearWaypoints(from: start, to: end)
+        let totalLength = zip(waypoints, waypoints.dropFirst())
+            .reduce(CGFloat(0)) { $0 + hypot($1.1.x - $1.0.x, $1.1.y - $1.0.y) }
+
+        let segments = max(1, Int((totalLength / spacing).rounded()))
+        guard segments > 1 else { return [] }
+        return (1..<segments).map { point(alongWaypoints: waypoints, fraction: Double($0) / Double(segments)) }
+    }
+
+    private static func point(alongWaypoints waypoints: [CGPoint], fraction: Double) -> CGPoint {
+        guard waypoints.count > 1 else { return waypoints.first ?? .zero }
+        let segmentLengths = zip(waypoints, waypoints.dropFirst()).map { hypot($1.x - $0.x, $1.y - $0.y) }
+        let totalLength = segmentLengths.reduce(0, +)
+        guard totalLength > 0 else { return waypoints[0] }
+
+        let target = CGFloat(fraction) * totalLength
+        var accumulated: CGFloat = 0
+        for index in segmentLengths.indices {
+            let segmentLength = segmentLengths[index]
+            if accumulated + segmentLength >= target || index == segmentLengths.count - 1 {
+                let segmentFraction = segmentLength > 0 ? (target - accumulated) / segmentLength : 0
+                let p0 = waypoints[index], p1 = waypoints[index + 1]
+                return CGPoint(x: p0.x + (p1.x - p0.x) * segmentFraction, y: p0.y + (p1.y - p0.y) * segmentFraction)
+            }
+            accumulated += segmentLength
+        }
+        return waypoints[waypoints.count - 1]
     }
 }
