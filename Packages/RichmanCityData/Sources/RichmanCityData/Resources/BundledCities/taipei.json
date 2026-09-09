@@ -1,0 +1,677 @@
+{
+  "board" : {
+    "tiles" : [
+      {
+        "category" : {
+          "go" : {
+
+          }
+        },
+        "id" : 0,
+        "name" : "Go"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "四川路一段 District",
+              "houseCost" : 30,
+              "price" : 60,
+              "rentTable" : [
+                6,
+                30,
+                90,
+                180,
+                240,
+                300
+              ]
+            }
+          }
+        },
+        "id" : 1,
+        "name" : "四川路一段"
+      },
+      {
+        "category" : {
+          "communityChest" : {
+
+          }
+        },
+        "id" : 2,
+        "name" : "Community Chest"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "四川路一段 District",
+              "houseCost" : 40,
+              "price" : 80,
+              "rentTable" : [
+                8,
+                40,
+                120,
+                240,
+                320,
+                400
+              ]
+            }
+          }
+        },
+        "id" : 3,
+        "name" : "館前西路"
+      },
+      {
+        "category" : {
+          "tax" : {
+            "amount" : 200
+          }
+        },
+        "id" : 4,
+        "name" : "Income Tax"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 5,
+        "name" : "劍南路"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "淡金路 District",
+              "houseCost" : 50,
+              "price" : 100,
+              "rentTable" : [
+                10,
+                50,
+                150,
+                300,
+                400,
+                500
+              ]
+            }
+          }
+        },
+        "id" : 6,
+        "name" : "淡金路"
+      },
+      {
+        "category" : {
+          "chance" : {
+
+          }
+        },
+        "id" : 7,
+        "name" : "Chance"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "淡金路 District",
+              "houseCost" : 60,
+              "price" : 120,
+              "rentTable" : [
+                12,
+                60,
+                180,
+                360,
+                480,
+                600
+              ]
+            }
+          }
+        },
+        "id" : 8,
+        "name" : "巴拉卡公路"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "淡金路 District",
+              "houseCost" : 70,
+              "price" : 140,
+              "rentTable" : [
+                14,
+                70,
+                210,
+                420,
+                560,
+                700
+              ]
+            }
+          }
+        },
+        "id" : 9,
+        "name" : "中和隧道"
+      },
+      {
+        "category" : {
+          "jail" : {
+
+          }
+        },
+        "id" : 10,
+        "name" : "Jail"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "中山路一段 District",
+              "houseCost" : 70,
+              "price" : 140,
+              "rentTable" : [
+                14,
+                70,
+                210,
+                420,
+                560,
+                700
+              ]
+            }
+          }
+        },
+        "id" : 11,
+        "name" : "中山路一段"
+      },
+      {
+        "category" : {
+          "utility" : {
+            "_0" : {
+              "price" : 150,
+              "rentMultiplierByOwnedCount" : [
+                4,
+                10
+              ]
+            }
+          }
+        },
+        "id" : 12,
+        "name" : "美麗華摩天輪"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "中山路一段 District",
+              "houseCost" : 80,
+              "price" : 160,
+              "rentTable" : [
+                16,
+                80,
+                240,
+                480,
+                640,
+                800
+              ]
+            }
+          }
+        },
+        "id" : 13,
+        "name" : "安坑隧道"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "中山路一段 District",
+              "houseCost" : 90,
+              "price" : 180,
+              "rentTable" : [
+                18,
+                90,
+                270,
+                540,
+                720,
+                900
+              ]
+            }
+          }
+        },
+        "id" : 14,
+        "name" : "環河路"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 15,
+        "name" : "西湖"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "碇坪路一段 District",
+              "houseCost" : 90,
+              "price" : 180,
+              "rentTable" : [
+                18,
+                90,
+                270,
+                540,
+                720,
+                900
+              ]
+            }
+          }
+        },
+        "id" : 16,
+        "name" : "碇坪路一段"
+      },
+      {
+        "category" : {
+          "communityChest" : {
+
+          }
+        },
+        "id" : 17,
+        "name" : "Community Chest"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "碇坪路一段 District",
+              "houseCost" : 100,
+              "price" : 200,
+              "rentTable" : [
+                20,
+                100,
+                300,
+                600,
+                800,
+                1000
+              ]
+            }
+          }
+        },
+        "id" : 18,
+        "name" : "民族路"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "碇坪路一段 District",
+              "houseCost" : 110,
+              "price" : 220,
+              "rentTable" : [
+                22,
+                110,
+                330,
+                660,
+                880,
+                1100
+              ]
+            }
+          }
+        },
+        "id" : 19,
+        "name" : "靜安路一段"
+      },
+      {
+        "category" : {
+          "freeParking" : {
+
+          }
+        },
+        "id" : 20,
+        "name" : "Free Parking"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "文山路一段 District",
+              "houseCost" : 110,
+              "price" : 220,
+              "rentTable" : [
+                22,
+                110,
+                330,
+                660,
+                880,
+                1100
+              ]
+            }
+          }
+        },
+        "id" : 21,
+        "name" : "文山路一段"
+      },
+      {
+        "category" : {
+          "chance" : {
+
+          }
+        },
+        "id" : 22,
+        "name" : "Chance"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "文山路一段 District",
+              "houseCost" : 120,
+              "price" : 240,
+              "rentTable" : [
+                24,
+                120,
+                360,
+                720,
+                960,
+                1200
+              ]
+            }
+          }
+        },
+        "id" : 23,
+        "name" : "民生路一段"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "文山路一段 District",
+              "houseCost" : 130,
+              "price" : 260,
+              "rentTable" : [
+                26,
+                130,
+                390,
+                780,
+                1040,
+                1300
+              ]
+            }
+          }
+        },
+        "id" : 24,
+        "name" : "景平路"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 25,
+        "name" : "港墘"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "東西向快速公路 八里新店線 District",
+              "houseCost" : 130,
+              "price" : 260,
+              "rentTable" : [
+                26,
+                130,
+                390,
+                780,
+                1040,
+                1300
+              ]
+            }
+          }
+        },
+        "id" : 26,
+        "name" : "東西向快速公路 八里新店線"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "東西向快速公路 八里新店線 District",
+              "houseCost" : 140,
+              "price" : 280,
+              "rentTable" : [
+                28,
+                140,
+                420,
+                840,
+                1120,
+                1400
+              ]
+            }
+          }
+        },
+        "id" : 27,
+        "name" : "木新路三段"
+      },
+      {
+        "category" : {
+          "utility" : {
+            "_0" : {
+              "price" : 150,
+              "rentMultiplierByOwnedCount" : [
+                4,
+                10
+              ]
+            }
+          }
+        },
+        "id" : 28,
+        "name" : "心臟血管主題園區"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "東西向快速公路 八里新店線 District",
+              "houseCost" : 150,
+              "price" : 300,
+              "rentTable" : [
+                30,
+                150,
+                450,
+                900,
+                1200,
+                1500
+              ]
+            }
+          }
+        },
+        "id" : 29,
+        "name" : "文化路一段"
+      },
+      {
+        "category" : {
+          "goToJail" : {
+
+          }
+        },
+        "id" : 30,
+        "name" : "Go To Jail"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "民生路三段 District",
+              "houseCost" : 150,
+              "price" : 300,
+              "rentTable" : [
+                30,
+                150,
+                450,
+                900,
+                1200,
+                1500
+              ]
+            }
+          }
+        },
+        "id" : 31,
+        "name" : "民生路三段"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "民生路三段 District",
+              "houseCost" : 160,
+              "price" : 320,
+              "rentTable" : [
+                32,
+                160,
+                480,
+                960,
+                1280,
+                1600
+              ]
+            }
+          }
+        },
+        "id" : 32,
+        "name" : "大漢橋"
+      },
+      {
+        "category" : {
+          "communityChest" : {
+
+          }
+        },
+        "id" : 33,
+        "name" : "Community Chest"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "民生路三段 District",
+              "houseCost" : 170,
+              "price" : 340,
+              "rentTable" : [
+                34,
+                170,
+                510,
+                1020,
+                1360,
+                1700
+              ]
+            }
+          }
+        },
+        "id" : 34,
+        "name" : "景安路"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 35,
+        "name" : "大直"
+      },
+      {
+        "category" : {
+          "chance" : {
+
+          }
+        },
+        "id" : 36,
+        "name" : "Chance"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "北新路三段 District",
+              "houseCost" : 175,
+              "price" : 350,
+              "rentTable" : [
+                35,
+                175,
+                525,
+                1050,
+                1400,
+                1750
+              ]
+            }
+          }
+        },
+        "id" : 37,
+        "name" : "北新路三段"
+      },
+      {
+        "category" : {
+          "tax" : {
+            "amount" : 100
+          }
+        },
+        "id" : 38,
+        "name" : "Luxury Tax"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "北新路三段 District",
+              "houseCost" : 200,
+              "price" : 400,
+              "rentTable" : [
+                40,
+                200,
+                600,
+                1200,
+                1600,
+                2000
+              ]
+            }
+          }
+        },
+        "id" : 39,
+        "name" : "關渡大橋"
+      }
+    ]
+  },
+  "fetchedAt" : "2026-09-09T17:59:59Z",
+  "queriedName" : "Taipei",
+  "resolvedDisplayName" : "Taipei, Taiwan"
+}

@@ -9,22 +9,22 @@ Richman iOS is built as a thin SwiftUI app shell over five independent Swift pac
                             │ depends on
               ┌─────────────┼─────────────┬───────────────┐
               ▼             ▼             ▼               ▼
-      RichmanGameUI   RichmanCore  RichmanCityData  RichmanPersistence
-              │             ▲             ▲               ▲
-              └─────────────┴─────────────┴───────────────┘
-                       (RichmanGameUI depends on the other three;
-                        it renders their protocols/models, never
-                        reaches into their internals)
-
-      RichmanAssetsKit — depended on by RichmanGameUI only; the art/sound seam.
+      RichmanGameUI   RichmanCityData  RichmanPersistence  RichmanAssetsKit
+              │             │               │
+              │             ▼               │
+              │        RichmanCore ◀────────┘
+              └─────────────┘
+       (RichmanGameUI also depends on RichmanCore directly, to drive GameEngine)
 ```
+
+`RichmanCore` is the one package everything else ultimately depends on (directly or via `RichmanCityData`); it depends on nothing itself.
 
 ## Modules
 
 | Package | Responsibility | Depends on | UIKit/SwiftUI? | Network? |
 |---|---|---|---|---|
-| `RichmanCore` | Board, players, turns, cards, economy — the actual game rules. | nothing | no | no |
-| `RichmanCityData` | Turns a city name into a `CityBoardLayout` (real streets/stations/landmarks). | nothing | no | yes (Nominatim + Overpass) |
+| `RichmanCore` | Board, players, turns, cards, economy — the actual game rules. Also defines `BoardTemplate`, the shared 40-slot shape/pricing both `StandardBoard` and `RichmanCityData` build boards from. | nothing | no | no |
+| `RichmanCityData` | Turns a city name into a `CityBoardLayout` (a real `RichmanCore.Board` built from real streets/stations/landmarks). | `RichmanCore` (for `Board`/`BoardTemplate`) | no | yes (Nominatim + Overpass) |
 | `RichmanAssetsKit` | `AssetProvider` protocol + placeholder implementation. The seam other tools plug real art/sound into. | nothing | SwiftUI (`Image`) | no |
 | `RichmanPersistence` | Save/load `GameState` and cache `CityBoardLayout` results to disk. | `RichmanCore`, `RichmanCityData` (for the types it persists) | no | no |
 | `RichmanGameUI` | All SwiftUI views: board, HUD, dice, dialogs. | `RichmanCore`, `RichmanCityData`, `RichmanAssetsKit` | yes | no |

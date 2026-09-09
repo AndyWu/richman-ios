@@ -7,8 +7,12 @@ let package = Package(
     products: [
         .library(name: "RichmanPersistence", targets: ["RichmanPersistence"])
     ],
+    dependencies: [
+        .package(path: "../RichmanCore"),
+        .package(path: "../RichmanCityData")
+    ],
     targets: [
-        .target(name: "RichmanPersistence"),
+        .target(name: "RichmanPersistence", dependencies: ["RichmanCore", "RichmanCityData"]),
         .testTarget(name: "RichmanPersistenceTests", dependencies: ["RichmanPersistence"])
     ]
 )

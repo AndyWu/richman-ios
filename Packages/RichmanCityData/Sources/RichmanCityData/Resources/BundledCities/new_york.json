@@ -1,0 +1,677 @@
+{
+  "board" : {
+    "tiles" : [
+      {
+        "category" : {
+          "go" : {
+
+          }
+        },
+        "id" : 0,
+        "name" : "Go"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Baychester Avenue District",
+              "houseCost" : 30,
+              "price" : 60,
+              "rentTable" : [
+                6,
+                30,
+                90,
+                180,
+                240,
+                300
+              ]
+            }
+          }
+        },
+        "id" : 1,
+        "name" : "Baychester Avenue"
+      },
+      {
+        "category" : {
+          "communityChest" : {
+
+          }
+        },
+        "id" : 2,
+        "name" : "Community Chest"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Baychester Avenue District",
+              "houseCost" : 40,
+              "price" : 80,
+              "rentTable" : [
+                8,
+                40,
+                120,
+                240,
+                320,
+                400
+              ]
+            }
+          }
+        },
+        "id" : 3,
+        "name" : "Nereid Avenue"
+      },
+      {
+        "category" : {
+          "tax" : {
+            "amount" : 200
+          }
+        },
+        "id" : 4,
+        "name" : "Income Tax"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 5,
+        "name" : "DeKalb Avenue"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Shore Road District",
+              "houseCost" : 50,
+              "price" : 100,
+              "rentTable" : [
+                10,
+                50,
+                150,
+                300,
+                400,
+                500
+              ]
+            }
+          }
+        },
+        "id" : 6,
+        "name" : "Shore Road"
+      },
+      {
+        "category" : {
+          "chance" : {
+
+          }
+        },
+        "id" : 7,
+        "name" : "Chance"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Shore Road District",
+              "houseCost" : 60,
+              "price" : 120,
+              "rentTable" : [
+                12,
+                60,
+                180,
+                360,
+                480,
+                600
+              ]
+            }
+          }
+        },
+        "id" : 8,
+        "name" : "East Gun Hill Road"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Shore Road District",
+              "houseCost" : 70,
+              "price" : 140,
+              "rentTable" : [
+                14,
+                70,
+                210,
+                420,
+                560,
+                700
+              ]
+            }
+          }
+        },
+        "id" : 9,
+        "name" : "Van Cortlandt Avenue West"
+      },
+      {
+        "category" : {
+          "jail" : {
+
+          }
+        },
+        "id" : 10,
+        "name" : "Jail"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Southern Boulevard District",
+              "houseCost" : 70,
+              "price" : 140,
+              "rentTable" : [
+                14,
+                70,
+                210,
+                420,
+                560,
+                700
+              ]
+            }
+          }
+        },
+        "id" : 11,
+        "name" : "Southern Boulevard"
+      },
+      {
+        "category" : {
+          "utility" : {
+            "_0" : {
+              "price" : 150,
+              "rentMultiplierByOwnedCount" : [
+                4,
+                10
+              ]
+            }
+          }
+        },
+        "id" : 12,
+        "name" : "Kayak Brooklyn"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Southern Boulevard District",
+              "houseCost" : 80,
+              "price" : 160,
+              "rentTable" : [
+                16,
+                80,
+                240,
+                480,
+                640,
+                800
+              ]
+            }
+          }
+        },
+        "id" : 13,
+        "name" : "West 225th Street"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Southern Boulevard District",
+              "houseCost" : 90,
+              "price" : 180,
+              "rentTable" : [
+                18,
+                90,
+                270,
+                540,
+                720,
+                900
+              ]
+            }
+          }
+        },
+        "id" : 14,
+        "name" : "Bronx River Parkway Road"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 15,
+        "name" : "York Street"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "West Fordham Road District",
+              "houseCost" : 90,
+              "price" : 180,
+              "rentTable" : [
+                18,
+                90,
+                270,
+                540,
+                720,
+                900
+              ]
+            }
+          }
+        },
+        "id" : 16,
+        "name" : "West Fordham Road"
+      },
+      {
+        "category" : {
+          "communityChest" : {
+
+          }
+        },
+        "id" : 17,
+        "name" : "Community Chest"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "West Fordham Road District",
+              "houseCost" : 100,
+              "price" : 200,
+              "rentTable" : [
+                20,
+                100,
+                300,
+                600,
+                800,
+                1000
+              ]
+            }
+          }
+        },
+        "id" : 18,
+        "name" : "Cross Bronx Expressway"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "West Fordham Road District",
+              "houseCost" : 110,
+              "price" : 220,
+              "rentTable" : [
+                22,
+                110,
+                330,
+                660,
+                880,
+                1100
+              ]
+            }
+          }
+        },
+        "id" : 19,
+        "name" : "Seaman Avenue"
+      },
+      {
+        "category" : {
+          "freeParking" : {
+
+          }
+        },
+        "id" : 20,
+        "name" : "Free Parking"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Riverside Drive District",
+              "houseCost" : 110,
+              "price" : 220,
+              "rentTable" : [
+                22,
+                110,
+                330,
+                660,
+                880,
+                1100
+              ]
+            }
+          }
+        },
+        "id" : 21,
+        "name" : "Riverside Drive"
+      },
+      {
+        "category" : {
+          "chance" : {
+
+          }
+        },
+        "id" : 22,
+        "name" : "Chance"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Riverside Drive District",
+              "houseCost" : 120,
+              "price" : 240,
+              "rentTable" : [
+                24,
+                120,
+                360,
+                720,
+                960,
+                1200
+              ]
+            }
+          }
+        },
+        "id" : 23,
+        "name" : "Dyckman Street"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Riverside Drive District",
+              "houseCost" : 130,
+              "price" : 260,
+              "rentTable" : [
+                26,
+                130,
+                390,
+                780,
+                1040,
+                1300
+              ]
+            }
+          }
+        },
+        "id" : 24,
+        "name" : "Sherman Avenue"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 25,
+        "name" : "Hoyt Street"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Nagle Avenue District",
+              "houseCost" : 130,
+              "price" : 260,
+              "rentTable" : [
+                26,
+                130,
+                390,
+                780,
+                1040,
+                1300
+              ]
+            }
+          }
+        },
+        "id" : 26,
+        "name" : "Nagle Avenue"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Nagle Avenue District",
+              "houseCost" : 140,
+              "price" : 280,
+              "rentTable" : [
+                28,
+                140,
+                420,
+                840,
+                1120,
+                1400
+              ]
+            }
+          }
+        },
+        "id" : 27,
+        "name" : "Fort George Avenue"
+      },
+      {
+        "category" : {
+          "utility" : {
+            "_0" : {
+              "price" : 150,
+              "rentMultiplierByOwnedCount" : [
+                4,
+                10
+              ]
+            }
+          }
+        },
+        "id" : 28,
+        "name" : "Brooklyn Heights Promenade"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "Nagle Avenue District",
+              "houseCost" : 150,
+              "price" : 300,
+              "rentTable" : [
+                30,
+                150,
+                450,
+                900,
+                1200,
+                1500
+              ]
+            }
+          }
+        },
+        "id" : 29,
+        "name" : "Cross Bronx Expressway Service Road"
+      },
+      {
+        "category" : {
+          "goToJail" : {
+
+          }
+        },
+        "id" : 30,
+        "name" : "Go To Jail"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "East 177th Street District",
+              "houseCost" : 150,
+              "price" : 300,
+              "rentTable" : [
+                30,
+                150,
+                450,
+                900,
+                1200,
+                1500
+              ]
+            }
+          }
+        },
+        "id" : 31,
+        "name" : "East 177th Street"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "East 177th Street District",
+              "houseCost" : 160,
+              "price" : 320,
+              "rentTable" : [
+                32,
+                160,
+                480,
+                960,
+                1280,
+                1600
+              ]
+            }
+          }
+        },
+        "id" : 32,
+        "name" : "West 181st Street"
+      },
+      {
+        "category" : {
+          "communityChest" : {
+
+          }
+        },
+        "id" : 33,
+        "name" : "Community Chest"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "East 177th Street District",
+              "houseCost" : 170,
+              "price" : 340,
+              "rentTable" : [
+                34,
+                170,
+                510,
+                1020,
+                1360,
+                1700
+              ]
+            }
+          }
+        },
+        "id" : 34,
+        "name" : "West 179th Street"
+      },
+      {
+        "category" : {
+          "transit" : {
+            "_0" : {
+              "price" : 200,
+              "rentByOwnedCount" : [
+                25,
+                50,
+                100,
+                200
+              ]
+            }
+          }
+        },
+        "id" : 35,
+        "name" : "Lafayette Avenue"
+      },
+      {
+        "category" : {
+          "chance" : {
+
+          }
+        },
+        "id" : 36,
+        "name" : "Chance"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "West 178th Street District",
+              "houseCost" : 175,
+              "price" : 350,
+              "rentTable" : [
+                35,
+                175,
+                525,
+                1050,
+                1400,
+                1750
+              ]
+            }
+          }
+        },
+        "id" : 37,
+        "name" : "West 178th Street"
+      },
+      {
+        "category" : {
+          "tax" : {
+            "amount" : 100
+          }
+        },
+        "id" : 38,
+        "name" : "Luxury Tax"
+      },
+      {
+        "category" : {
+          "property" : {
+            "_0" : {
+              "colorGroup" : "West 178th Street District",
+              "houseCost" : 200,
+              "price" : 400,
+              "rentTable" : [
+                40,
+                200,
+                600,
+                1200,
+                1600,
+                2000
+              ]
+            }
+          }
+        },
+        "id" : 39,
+        "name" : "West 161st Street"
+      }
+    ]
+  },
+  "fetchedAt" : "2026-09-09T17:59:38Z",
+  "queriedName" : "New York",
+  "resolvedDisplayName" : "New York, United States"
+}
