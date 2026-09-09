@@ -32,27 +32,36 @@ public struct BoardView<CenterContent: View>: View {
     }
 
     public var body: some View {
-        GeometryReader { proxy in
-            let side = min(proxy.size.width, proxy.size.height)
-            let cell = side / CGFloat(BoardLayoutMath.gridSize)
+        // `Color.clear.aspectRatio(1, contentMode: .fit)` is the size driver:
+        // it reliably reports "as large as possible while staying square" to
+        // the parent VStack. Chaining `.aspectRatio` directly after a
+        // GeometryReader is a known-unreliable combination — GeometryReader
+        // has no natural ideal size, so the parent often still allocates it
+        // far more height than a square needs, leaving dead space.
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                GeometryReader { proxy in
+                    let side = min(proxy.size.width, proxy.size.height)
+                    let cell = side / CGFloat(BoardLayoutMath.gridSize)
 
-            ZStack(alignment: .topLeading) {
-                ForEach(board.tiles) { tile in
-                    tileView(for: tile, cell: cell)
+                    ZStack(alignment: .topLeading) {
+                        ForEach(board.tiles) { tile in
+                            tileView(for: tile, cell: cell)
+                        }
+                        ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
+                            tokenView(for: player, index: index, cell: cell)
+                        }
+                        centerContent()
+                            .frame(
+                                width: cell * CGFloat(BoardLayoutMath.gridSize - 2),
+                                height: cell * CGFloat(BoardLayoutMath.gridSize - 2)
+                            )
+                            .position(x: side / 2, y: side / 2)
+                    }
+                    .frame(width: side, height: side)
                 }
-                ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
-                    tokenView(for: player, index: index, cell: cell)
-                }
-                centerContent()
-                    .frame(
-                        width: cell * CGFloat(BoardLayoutMath.gridSize - 2),
-                        height: cell * CGFloat(BoardLayoutMath.gridSize - 2)
-                    )
-                    .position(x: side / 2, y: side / 2)
             }
-            .frame(width: side, height: side)
-        }
-        .aspectRatio(1, contentMode: .fit)
     }
 
     private func tileView(for tile: Tile, cell: CGFloat) -> some View {

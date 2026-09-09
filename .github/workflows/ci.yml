@@ -36,11 +36,11 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
-        run: xcodegen generate -p App
+        run: xcodegen generate
       - name: Build for iOS Simulator
         run: |
           xcodebuild build \
-            -project App/RichmanApp.xcodeproj \
+            -project RichmanApp.xcodeproj \
             -scheme RichmanApp \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO

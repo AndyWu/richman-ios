@@ -21,7 +21,11 @@ public struct CityBoardLayout: Codable, Equatable, Sendable {
         self.queriedName = queriedName
         self.resolvedDisplayName = resolvedDisplayName
         self.board = board
-        self.fetchedAt = fetchedAt
+        // Truncated to whole seconds so a JSON round-trip through ISO 8601
+        // (used by RichmanPersistence's on-disk cache) is lossless — otherwise
+        // a freshly-constructed value and one just loaded from the cache
+        // would never compare equal, despite looking identical.
+        self.fetchedAt = Date(timeIntervalSince1970: fetchedAt.timeIntervalSince1970.rounded())
     }
 }
 

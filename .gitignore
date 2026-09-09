@@ -64,8 +64,11 @@ fastlane/test_output
 # macOS
 .DS_Store
 
-# XcodeGen-generated project (source of truth is project.yml; run `xcodegen generate`)
-App/RichmanApp.xcodeproj/
+# XcodeGen-generated project (source of truth is project.yml; run `xcodegen generate`).
+# Generated at the repo root, alongside project.yml — XcodeGen mishandles the
+# generated Info.plist's path when the project is written to a different
+# directory than the spec (e.g. via `-p App`), so don't move this.
+/RichmanApp.xcodeproj/
 
 # Swift Package Manager local build artifacts
 .swiftpm/
