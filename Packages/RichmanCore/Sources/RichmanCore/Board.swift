@@ -46,11 +46,18 @@ public struct Tile: Identifiable, Codable, Equatable, Sendable {
     public var id: Int
     public var name: String
     public var category: TileCategory
+    /// A rendering hint only — never read by `GameEngine`/`GameState`. Real-city
+    /// boards (`RichmanCityData`) set this so `RichmanGameUI` can lay the board
+    /// out as a path tracing the city's real shape instead of a square; `nil`
+    /// (the case for `StandardBoard`) means "no real geography, use the
+    /// classic square layout."
+    public var mapPosition: TileMapPosition?
 
-    public init(id: Int, name: String, category: TileCategory) {
+    public init(id: Int, name: String, category: TileCategory, mapPosition: TileMapPosition? = nil) {
         self.id = id
         self.name = name
         self.category = category
+        self.mapPosition = mapPosition
     }
 
     public var isOwnable: Bool {
@@ -58,6 +65,19 @@ public struct Tile: Identifiable, Codable, Equatable, Sendable {
         case .property, .transit, .utility: return true
         default: return false
         }
+    }
+}
+
+/// A tile's position for path-based (real-geography) board rendering,
+/// normalized to 0...1 on both axes with the real city's aspect ratio
+/// preserved. `y` increases downward (screen convention).
+public struct TileMapPosition: Codable, Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+
+    public init(x: Double, y: Double) {
+        self.x = x
+        self.y = y
     }
 }
 

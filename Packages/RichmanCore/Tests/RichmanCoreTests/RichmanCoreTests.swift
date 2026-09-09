@@ -11,6 +11,19 @@ final class RichmanCoreTests: XCTestCase {
         XCTAssertEqual(board.tiles.first?.category, .go)
     }
 
+    func testStandardBoardTilesHaveNoMapPosition() {
+        // No real geography to place them at — RichmanGameUI falls back to the classic square layout.
+        let board = StandardBoard.classic40Tile()
+        XCTAssertTrue(board.tiles.allSatisfy { $0.mapPosition == nil })
+    }
+
+    func testTileMapPositionRoundTripsThroughCodable() throws {
+        let tile = Tile(id: 1, name: "Test Ave", category: .go, mapPosition: TileMapPosition(x: 0.25, y: 0.75))
+        let data = try JSONEncoder().encode(tile)
+        let decoded = try JSONDecoder().decode(Tile.self, from: data)
+        XCTAssertEqual(decoded.mapPosition, TileMapPosition(x: 0.25, y: 0.75))
+    }
+
     func testNewGameStartsPlayersAtGoWithTenTimesTheMostExpensivePropertyPrice() {
         let board = StandardBoard.classic40Tile()
         let state = GameState.newGame(board: board, playerNames: ["A", "B"])

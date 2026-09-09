@@ -13,15 +13,27 @@
    Each block has its own numeric cap (roads 300, stations 120, landmarks 60). OSM splits roads into a new "way" at every intersection, so a single named avenue in a big city can appear as hundreds of segments; uncapped, a city like New York returns 50,000+ elements and tens of megabytes for a query that only needs ~28 distinct names. Capping keeps the fetch fast on a phone and keeps this app a reasonable citizen of a shared, free public API.
 
 3. **Rank & select** (`BoardLayoutBuilder`) —
-   - Roads are deduplicated by name and sorted **farthest-from-center first**; the 22 property slots are filled in that order, so tiles near Go are the cheapest (outskirts) and tiles in the last color group are the priciest (city center) — the classic Monopoly cheap-to-expensive ramp, driven by real geography instead of an arbitrary list.
-   - Stations are deduplicated and sorted **closest-to-center first** (major hubs tend to be central) to fill the 4 transit tiles.
-   - Landmarks/airports fill the 2 utility tiles, closest-to-center first.
+   - Every candidate road/station/landmark is deduplicated by name, then sorted by **polar angle around the city's center** (an arbitrary start angle, increasing counter-clockwise) rather than by distance. Walking the board's fixed slot order while popping from these angle-sorted lists produces a sequence that hugs the outer boundary of the selected points — a cheap stand-in for real road-network routing, and what makes the board's shape actually trace the city (see "Board shape" below).
+   - Roads fill the 22 property slots, stations the 4 transit slots, landmarks/airports the 2 utility slots, all in that angle order.
    - If a city doesn't have enough tagged data (a small town, sparse OSM coverage), the remaining slots are padded with generic names (`Local Road N`, etc.) so the board is always fully playable.
-4. **Price/rent** — every property/transit/utility tile gets its price and rent table from `BoardTemplate.propertyDetails`/`transitDetails`/`utilityDetails` — the same formula `StandardBoard` uses, keyed only by the tile's position in the classic slot order. A city board is never mechanically different from the generic one, only re-skinned.
+4. **Price/rent** — every property/transit/utility tile gets its price and rent table from `BoardTemplate.propertyDetails`/`transitDetails`/`utilityDetails` — the same formula `StandardBoard` uses, keyed only by the tile's position in the classic slot order. A city board is never mechanically different from the generic one, only re-skinned. Price now correlates with *how far along the geographic loop* a tile falls, not distance from the center specifically — a deliberate trade discussed below.
 
-## Known simplification
+## Board shape
 
-Properties are grouped into color groups by their position in the farthest-to-closest ranking, not by real geographic clustering (e.g. "these 3 roads are all in the same neighborhood"). This is a reasonable approximation — roads at similar distance from the center tend to be roughly contemporaneous — but a true neighborhood-clustering pass (e.g. using OSM `place`/`suburb` boundaries) would be a nice future improvement, isolated entirely to `BoardLayoutBuilder`.
+Every tile also gets a `RichmanCore.TileMapPosition` (normalized `0...1`, aspect-ratio preserved) instead of always sitting on a square perimeter:
+
+1. Real (lat, lon) is recorded for every non-padded road/station/landmark tile as it's assigned to a slot.
+2. Those coordinates are fit into a `0...1` box, preserving the city's real aspect ratio (a tall city stays tall, not stretched square).
+3. A lightweight pairwise-repulsion pass (`decluttered(_:)`) nudges any tiles closer together than one tile-chip-width apart — real geography can put several tiles right on top of each other (dense downtown blocks vs. a sprawling suburb), which a fixed-size chip can't render legibly. This is a local nudge, not a reshape; the overall path still traces the real geography.
+4. Every remaining tile (padded properties/stations/utilities, and every generic tile — Go, Jail, Chance, Tax, etc.) gets a position by linearly interpolating between the nearest real-positioned tiles before and after it in board order, so the path has no gaps.
+
+`RichmanGameUI`'s `BoardView` renders any board where every tile has a `mapPosition` as a winding path (tiles strung along a line in board order) instead of the classic square — see `Packages/RichmanGameUI/Sources/RichmanGameUI/BoardView.swift`. `StandardBoard` never sets `mapPosition`, so the generic (no-city) board is unaffected and keeps the classic square.
+
+## Known simplifications
+
+- The path is an angle-sorted approximation of the region's outline, not real road-network routing — it won't follow actual streets turn-by-turn, just the overall shape of where they are.
+- Color groups are still assigned by position in the angle-sorted sequence, not true geographic clustering (e.g. "these 3 roads are all in the same neighborhood"). A real neighborhood-clustering pass (e.g. using OSM `place`/`suburb` boundaries) would be a nice future improvement, isolated entirely to `BoardLayoutBuilder`.
+- No terrain/landmass art — just the path line and tile chips (placeholder-tier, like everything else `RichmanAssetsKit` hasn't been given real art for yet).
 
 ## Offline / bundled cities
 
