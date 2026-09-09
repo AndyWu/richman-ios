@@ -11,10 +11,17 @@ final class RichmanCoreTests: XCTestCase {
         XCTAssertEqual(board.tiles.first?.category, .go)
     }
 
-    func testNewGameStartsPlayersAtGoWithStartingCash() {
-        let state = GameState.newGame(board: StandardBoard.classic40Tile(), playerNames: ["A", "B"])
+    func testNewGameStartsPlayersAtGoWithTenTimesTheMostExpensivePropertyPrice() {
+        let board = StandardBoard.classic40Tile()
+        let state = GameState.newGame(board: board, playerNames: ["A", "B"])
+
+        let mostExpensiveProperty = board.tiles.compactMap { tile -> Int? in
+            if case .property(let details) = tile.category { return details.price }
+            return nil
+        }.max()!
+
         XCTAssertEqual(state.players.count, 2)
-        XCTAssertTrue(state.players.allSatisfy { $0.position == 0 && $0.cash == 1_500 })
+        XCTAssertTrue(state.players.allSatisfy { $0.position == 0 && $0.cash == mostExpensiveProperty * 10 })
     }
 
     // MARK: - Movement & purchase
