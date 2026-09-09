@@ -20,7 +20,7 @@ enum BoardLayoutBuilder {
         var stationPadCount = 0
         var landmarkPadCount = 0
         var propertyNamesInOrder: [String] = []
-        var coordinates: [Int: (lat: Double, lon: Double)] = [:]
+        var coordinatesByIndex: [Int: (lat: Double, lon: Double)] = [:]
 
         let tiles: [Tile] = BoardTemplate.classicSlotOrder.enumerated().map { position, slot in
             switch slot {
@@ -37,7 +37,7 @@ enum BoardLayoutBuilder {
             case .transit:
                 let name: String
                 if let station = stationIterator.next() {
-                    coordinates[position] = (station.lat, station.lon)
+                    coordinatesByIndex[position] = (station.lat, station.lon)
                     name = station.name
                 } else {
                     stationPadCount += 1
@@ -47,7 +47,7 @@ enum BoardLayoutBuilder {
             case .utility:
                 let name: String
                 if let landmark = landmarkIterator.next() {
-                    coordinates[position] = (landmark.lat, landmark.lon)
+                    coordinatesByIndex[position] = (landmark.lat, landmark.lon)
                     name = landmark.name
                 } else {
                     landmarkPadCount += 1
@@ -57,7 +57,7 @@ enum BoardLayoutBuilder {
             case .property(let group, let indexInGroup):
                 let name: String
                 if let road = roadIterator.next() {
-                    coordinates[position] = (road.lat, road.lon)
+                    coordinatesByIndex[position] = (road.lat, road.lon)
                     name = road.name
                 } else {
                     roadPadCount += 1
@@ -74,15 +74,32 @@ enum BoardLayoutBuilder {
             }
         }
 
-        let knownPositions = normalizedPositions(from: coordinates)
-        let interpolated = interpolatedPositions(for: tiles.count, known: knownPositions)
-        let allPositions = decluttered(interpolated)
+        // Bucketing needs to be centered on where the *selected* tiles
+        // actually are, not the city's geocoded query center — real named
+        // major roads are frequently skewed toward one side of a city's
+        // bounding box, and bucketing around a center far from that cluster
+        // packs nearly everything into one or two of the 8 directions
+        // instead of spreading across all of them.
+        let layoutCenter = centroid(of: coordinatesByIndex.values)
+        let polarByIndex = coordinatesByIndex.mapValues { polarCoordinate(from: layoutCenter, to: $0) }
+        let interpolated = interpolatedPolar(for: tiles.count, known: polarByIndex)
+        let snapped = snappedToCompassDirections(interpolated, tileCount: tiles.count)
+        let allPositions = refit(snapped)
         let placedTiles = tiles.map { tile -> Tile in
             var placed = tile
             placed.mapPosition = allPositions[tile.id]
             return placed
         }
         return Board(tiles: placedTiles)
+    }
+
+    /// `internal` (not `private`) so `RichmanCityDataTests` can verify the
+    /// octilinear-snap guarantee directly against `snappedToCompassDirections`,
+    /// before `refit`'s rescale makes "bearing from center" ambiguous from
+    /// outside (the center of the *final*, refit board isn't (0.5, 0.5)).
+    struct PolarCoordinate {
+        var angle: Double // bearing from center, 0..<2π
+        var radius: Double // flat-earth distance from center, arbitrary units
     }
 
     /// Distinct places of one kind, ordered by polar angle around `center`
@@ -101,54 +118,44 @@ enum BoardLayoutBuilder {
             let key = place.name.lowercased()
             guard !seen.contains(key) else { continue }
             seen.insert(key)
-            let bearing = angle(from: center, to: (place.latitude, place.longitude))
-            result.append((place.name, place.latitude, place.longitude, bearing))
+            let polar = polarCoordinate(from: center, to: (place.latitude, place.longitude))
+            result.append((place.name, place.latitude, place.longitude, polar.angle))
         }
         return result.sorted { $0.angle < $1.angle }.map { ($0.name, $0.lat, $0.lon) }
     }
 
-    /// Bearing from `center` to `point`, in `0..<2π`. Flat-earth approximation
-    /// with the standard `cos(lat)` longitude correction — plenty accurate at
-    /// city scale and keeps this package free of CoreLocation/MapKit.
-    private static func angle(from center: (lat: Double, lon: Double), to point: (Double, Double)) -> Double {
+    /// Bearing and distance from `center` to `point`. Flat-earth
+    /// approximation with the standard `cos(lat)` longitude correction —
+    /// plenty accurate at city scale and keeps this package free of
+    /// CoreLocation/MapKit.
+    private static func polarCoordinate(from center: (lat: Double, lon: Double), to point: (Double, Double)) -> PolarCoordinate {
         let dx = (point.1 - center.lon) * cos(center.lat * .pi / 180)
         let dy = point.0 - center.lat
-        let raw = atan2(dy, dx)
-        return raw < 0 ? raw + 2 * .pi : raw
+        let rawAngle = atan2(dy, dx)
+        let angle = rawAngle < 0 ? rawAngle + 2 * .pi : rawAngle
+        let radius = (dx * dx + dy * dy).squareRoot()
+        return PolarCoordinate(angle: angle, radius: radius)
     }
 
-    /// Maps real (lat, lon) coordinates onto a 0...1 square, preserving the
-    /// real aspect ratio (a tall city stays tall, not stretched square) by
-    /// fitting the larger dimension to 0...1 and centering the other.
-    private static func normalizedPositions(from coordinates: [Int: (lat: Double, lon: Double)]) -> [Int: TileMapPosition] {
-        guard !coordinates.isEmpty else { return [:] }
-        let lats = coordinates.values.map(\.lat)
-        let lons = coordinates.values.map(\.lon)
-        let minLat = lats.min()!, maxLat = lats.max()!
-        let minLon = lons.min()!, maxLon = lons.max()!
-        let lonScale = cos((minLat + maxLat) / 2 * .pi / 180)
-
-        let width = max((maxLon - minLon) * lonScale, 0.000_001)
-        let height = max(maxLat - minLat, 0.000_001)
-        let side = max(width, height)
-        let xInset = (side - width) / 2
-        let yInset = (side - height) / 2
-
-        var result: [Int: TileMapPosition] = [:]
-        for (index, coordinate) in coordinates {
-            let x = ((coordinate.lon - minLon) * lonScale + xInset) / side
-            // Flip: higher latitude (further north) renders nearer the top.
-            let y = ((maxLat - coordinate.lat) + yInset) / side
-            result[index] = TileMapPosition(x: x, y: y)
-        }
-        return result
+    /// Plain average of a set of (lat, lon) points — the reference point
+    /// `snappedToCompassDirections` buckets around.
+    private static func centroid(of coordinates: Dictionary<Int, (lat: Double, lon: Double)>.Values) -> (lat: Double, lon: Double) {
+        guard !coordinates.isEmpty else { return (0, 0) }
+        let count = Double(coordinates.count)
+        let lat = coordinates.map(\.lat).reduce(0, +) / count
+        let lon = coordinates.map(\.lon).reduce(0, +) / count
+        return (lat, lon)
     }
 
-    /// Fills every tile index without a real position (padded properties,
-    /// and every generic tile — Go, Jail, Chance, etc.) by linearly
-    /// interpolating between the nearest real positions before and after it
-    /// (by board index, wrapping around), so the path is continuous.
-    private static func interpolatedPositions(for tileCount: Int, known: [Int: TileMapPosition]) -> [Int: TileMapPosition] {
+    /// Fills every tile index without a real coordinate (padded
+    /// properties/stations/utilities, and every generic tile — Go, Jail,
+    /// Chance, etc.) by interpolating between the nearest real coordinates
+    /// before and after it (by board index, wrapping around), so the path
+    /// has no gaps. Angle is unwrapped across the one point where the loop
+    /// crosses back through 0/2π so plain linear interpolation stays
+    /// monotonic (angles otherwise increase steadily around the loop, by
+    /// construction of `angleSortedPlaces`).
+    private static func interpolatedPolar(for tileCount: Int, known: [Int: PolarCoordinate]) -> [Int: PolarCoordinate] {
         guard !known.isEmpty else { return [:] }
         var result = known
         for index in 0..<tileCount where known[index] == nil {
@@ -164,66 +171,102 @@ enum BoardLayoutBuilder {
                 after = (after + 1) % tileCount
                 stepsAfter += 1
             }
-            let beforePosition = known[before]!
-            let afterPosition = known[after]!
+            let beforeValue = known[before]!
+            var afterAngle = known[after]!.angle
+            if afterAngle < beforeValue.angle {
+                afterAngle += 2 * .pi
+            }
             let fraction = Double(stepsBefore) / Double(stepsBefore + stepsAfter)
-            result[index] = TileMapPosition(
-                x: beforePosition.x + (afterPosition.x - beforePosition.x) * fraction,
-                y: beforePosition.y + (afterPosition.y - beforePosition.y) * fraction
-            )
+            let angle = beforeValue.angle + (afterAngle - beforeValue.angle) * fraction
+            let radius = beforeValue.radius + (known[after]!.radius - beforeValue.radius) * fraction
+            result[index] = PolarCoordinate(angle: angle.truncatingRemainder(dividingBy: 2 * .pi), radius: radius)
         }
         return result
     }
 
-    /// Real coordinates can put several tiles very close together (dense
-    /// downtown blocks vs. a sprawling suburb) — too close for a fixed-size
-    /// tile chip to render without overlapping. This nudges any pair closer
-    /// than `minDistance` apart, a few passes of simple pairwise repulsion,
-    /// then re-fits everything back into 0...1 (with a small margin so edge
-    /// tiles aren't clipped). Small-scale local declutter, not a reshape —
-    /// the overall path still traces the real geography.
-    private static func decluttered(
-        _ positions: [Int: TileMapPosition],
-        minDistance: Double = 0.13,
-        iterations: Int = 80
+    /// The heart of the London-Underground-style look: snap every tile's
+    /// bearing to the nearest of 8 compass directions, then place it along
+    /// that ray. Because bearing increases monotonically around the loop by
+    /// construction, this is a "star-shaped" polar curve — which can never
+    /// self-intersect no matter how the radius varies, so there's no need
+    /// for the old pairwise-declutter pass.
+    ///
+    /// Bucket boundaries are chosen by *quantile* (equal tile count per
+    /// bucket), not by splitting the circle into equal 45° wedges. Real
+    /// selected roads/stations are frequently skewed toward one side of a
+    /// city rather than spread evenly in every direction; fixed 45° wedges
+    /// would then cram most tiles into one or two directions while the rest
+    /// sit nearly empty. Quantile buckets still render at exactly the 8 fixed
+    /// compass angles (0°, 45°, 90°, ...) — only *which* real tiles map to
+    /// which of those 8 angles adapts to the data, keeping every direction
+    /// similarly populated.
+    ///
+    /// Every tile sharing a ray gets a strictly distinct radius along it,
+    /// ordered by real distance from center so closer-to-downtown tiles sit
+    /// nearer the hub. That renders as a clean straight segment wherever the
+    /// path revisits one ray, the way a Tube map runs a line straight for a
+    /// while before bending to the next station's direction.
+    static func snappedToCompassDirections(
+        _ polar: [Int: PolarCoordinate],
+        tileCount: Int
     ) -> [Int: TileMapPosition] {
-        guard positions.count > 1 else { return positions }
-        var points = positions
-        let ids = Array(points.keys)
+        guard !polar.isEmpty else { return [:] }
+        let directionCount = 8
+        let step = 2 * Double.pi / Double(directionCount)
+        // Fixed regardless of how many tiles land in the busiest bucket, so
+        // the star's overall diameter — and therefore how much `refit`'s
+        // later rescale shrinks everything — is predictable, not something
+        // that balloons whenever one direction happens to collect more
+        // tiles than another.
+        let baseRadius = 0.35
+        let maxRadius = 1.0
 
-        for _ in 0..<iterations {
-            var movedAny = false
-            for i in 0..<ids.count {
-                for j in (i + 1)..<ids.count {
-                    guard var a = points[ids[i]], var b = points[ids[j]] else { continue }
-                    let dx = b.x - a.x
-                    let dy = b.y - a.y
-                    let distance = (dx * dx + dy * dy).squareRoot()
-                    guard distance < minDistance else { continue }
-                    movedAny = true
-                    if distance < 0.000_001 {
-                        // Exactly coincident — nudge deterministically so the next pass has a direction to push along.
-                        b.x += minDistance / 2
-                    } else {
-                        let push = (minDistance - distance) / 2
-                        let ux = dx / distance, uy = dy / distance
-                        a.x -= ux * push; a.y -= uy * push
-                        b.x += ux * push; b.y += uy * push
-                    }
-                    points[ids[i]] = a
-                    points[ids[j]] = b
-                }
+        let sortedAngles = polar.values.map(\.angle).sorted()
+        // directionCount - 1 interior cut points split sortedAngles into
+        // directionCount equal-count groups.
+        let boundaries: [Double] = (1..<directionCount).map { cut in
+            let position = Double(cut) * Double(sortedAngles.count) / Double(directionCount)
+            let lowerIndex = min(Int(position), sortedAngles.count - 1)
+            let fraction = position - Double(lowerIndex)
+            let upperIndex = min(lowerIndex + 1, sortedAngles.count - 1)
+            return sortedAngles[lowerIndex] + (sortedAngles[upperIndex] - sortedAngles[lowerIndex]) * fraction
+        }
+        func bucket(forAngle angle: Double) -> Int {
+            for (cut, boundary) in boundaries.enumerated() where angle < boundary {
+                return cut
             }
-            if !movedAny { break }
+            return directionCount - 1
         }
 
-        return refit(points)
+        var indicesByBucket: [Int: [Int]] = [:]
+        for index in 0..<tileCount {
+            guard let value = polar[index] else { continue }
+            indicesByBucket[bucket(forAngle: value.angle), default: []].append(index)
+        }
+
+        var result: [Int: TileMapPosition] = [:]
+        for (bucket, indices) in indicesByBucket {
+            let snappedAngle = Double(bucket) * step
+            let orderedIndices = indices.sorted { (polar[$0]?.radius ?? 0) < (polar[$1]?.radius ?? 0) }
+            let lastRank = max(orderedIndices.count - 1, 1) // avoid /0 when a bucket has just one tile
+            for (rank, index) in orderedIndices.enumerated() {
+                let radius = baseRadius + Double(rank) / Double(lastRank) * (maxRadius - baseRadius)
+                result[index] = TileMapPosition(
+                    x: 0.5 + radius * cos(snappedAngle),
+                    // Screen y increases downward; negate so north renders toward the top.
+                    y: 0.5 - radius * sin(snappedAngle)
+                )
+            }
+        }
+        return result
     }
 
-    /// Rescales an arbitrary set of positions back into `0...1` (preserving
-    /// relative layout, not aspect ratio — the declutter pass can shift the
-    /// bounding box's proportions slightly), with a small margin so a tile
-    /// chip centered at an edge position doesn't get clipped.
+    /// Rescales into `0...1` with a small margin so a tile chip centered at
+    /// an edge position doesn't get clipped. Scales `x`/`y` by the *same*
+    /// factor (fitting the larger dimension, centering the other) rather
+    /// than independently — independent scaling would stretch the
+    /// carefully-snapped 45°/90° angles out of true whenever the bounding
+    /// box isn't square, which defeats the entire point of snapping them.
     private static func refit(_ positions: [Int: TileMapPosition], margin: Double = 0.05) -> [Int: TileMapPosition] {
         guard !positions.isEmpty else { return positions }
         let xs = positions.values.map(\.x)
@@ -232,12 +275,16 @@ enum BoardLayoutBuilder {
         let minY = ys.min()!, maxY = ys.max()!
         let width = max(maxX - minX, 0.000_001)
         let height = max(maxY - minY, 0.000_001)
+        let side = max(width, height)
         let usable = 1 - margin * 2
+        let scale = usable / side
+        let xInset = (usable - width * scale) / 2
+        let yInset = (usable - height * scale) / 2
 
         return positions.mapValues { position in
             TileMapPosition(
-                x: margin + (position.x - minX) / width * usable,
-                y: margin + (position.y - minY) / height * usable
+                x: margin + xInset + (position.x - minX) * scale,
+                y: margin + yInset + (position.y - minY) * scale
             )
         }
     }
