@@ -18,30 +18,24 @@
    - If a city doesn't have enough tagged data (a small town, sparse OSM coverage), the remaining slots are padded with generic names (`Local Road N`, etc.) so the board is always fully playable.
 4. **Price/rent** — every property/transit/utility tile gets its price and rent table from `BoardTemplate.propertyDetails`/`transitDetails`/`utilityDetails` — the same formula `StandardBoard` uses, keyed only by the tile's position in the classic slot order. A city board is never mechanically different from the generic one, only re-skinned. Price now correlates with *how far along the geographic loop* a tile falls, not distance from the center specifically — a deliberate trade discussed below.
 
-## Board shape: a Tube-map-style schematic, not literal geography
+## Board shape: real topology, drawn like a Tube map
 
-Every tile also gets a `RichmanCore.TileMapPosition` (normalized `0...1`) instead of always sitting on a square perimeter — but rather than plotting literal (lat, lon), positions are schematized the way a transit diagram (the London Underground map) is: straight spokes at clean compass angles, not a geographically accurate trace. Two earlier approaches were tried and replaced:
+Every tile also gets a `RichmanCore.TileMapPosition` (normalized `0...1`, real aspect ratio preserved) instead of always sitting on a square perimeter — `BoardLayoutBuilder` is responsible for *where things really are*, and `RichmanGameUI.BoardView` is responsible for *drawing that legibly*, kept as two separate concerns after a few iterations landed on the wrong side of that split. Three approaches were tried:
 
-- **Literal (lat, lon), aspect-preserved** — tiles landed at their real position. Looked geographically faithful, but real coordinates routinely put several tiles on top of each other (dense downtown blocks vs. a sprawling suburb), and the connecting line crossed itself in messy, hard-to-read tangles.
-- **Literal positions + pairwise-repulsion decluttering** — nudged overlapping tiles apart after the fact. Fixed the worst overlaps but the path still wasn't straight or clean, and self-crossings could still occur.
+1. **Literal (lat, lon), aspect-preserved** — tiles at their real position, connected with a plain line. Real coordinates routinely put several tiles on top of each other (dense downtown blocks vs. a sprawling suburb), and the connecting line crossed itself in messy tangles.
+2. **8-direction star** — every tile's bearing snapped to the nearest of 8 compass directions from a shared center, all radiating from one hub. Solved the overlap problem completely (a curve with monotonically-increasing bearing can't self-intersect), but looked like a generic 8-spoke asterisk, not the city — real position was discarded almost entirely.
+3. **Current: real positions + declutter (`BoardLayoutBuilder`) + octilinear bend-insertion at render time (`BoardView`)** — the one actually in use.
 
-The current approach (`snappedToCompassDirections` in `BoardLayoutBuilder`) instead:
+`BoardLayoutBuilder` fits every tile's real (lat, lon) into `0...1` (`normalizedPositions`), interpolates a position for every tile that didn't get a real coordinate (`interpolatedPositions`), then runs a pairwise-repulsion pass (`decluttered`) that nudges any two tiles closer than one tile-width apart away from each other — real geography can still put several tiles nearly on top of each other, and a fixed-size chip can't render that legibly. That's it; positions stay real and organic, not snapped to any grid or direction.
 
-1. Computes the centroid of every tile that got a real coordinate, and expresses each one as (bearing, distance) from *that* centroid — not the city's geocoded query center, which is often skewed to one side of where the selected roads actually cluster and would otherwise cram most tiles into one or two directions.
-2. Splits tiles into 8 buckets **by quantile** (equal tile count per bucket) rather than equal-angle wedges, then renders each bucket at one of the 8 fixed compass angles (0°, 45°, 90°, ... 315°). Quantile splitting is what keeps every direction similarly populated even when the real bearings are skewed — a fixed 45°-wedge split would leave that skew intact.
-3. Within a bucket, tiles get strictly distinct radii along that ray (ordered by real distance from center, closer tiles nearer the hub), spread across a fixed radius range — fixed regardless of bucket size, so the diagram's overall size doesn't balloon just because one direction happened to collect more tiles.
-
-Because bearing increases monotonically around the board's loop by construction (tiles are assigned to slots in angle-sorted order to begin with), this is a "star-shaped" polar curve — one where the radius can vary in any way along each ray without ever making the loop cross itself. That's what guarantees no overlapping routes structurally, rather than needing to detect and fix overlaps after the fact.
-
-Every remaining tile (padded properties/stations/utilities, and every generic tile — Go, Jail, Chance, Tax, etc.) gets a placeholder bearing/distance by linearly interpolating between the nearest real-positioned tiles before and after it in board order (handling the one point where bearing wraps back through 0°/360°), so the path has no gaps, then goes through the same bucket-and-snap step as everything else.
-
-`RichmanGameUI`'s `BoardView` renders any board where every tile has a `mapPosition` as this spoked path instead of the classic square — see `Packages/RichmanGameUI/Sources/RichmanGameUI/BoardView.swift`. `StandardBoard` never sets `mapPosition`, so the generic (no-city) board is unaffected and keeps the classic square.
+The Tube-map look — every drawn segment horizontal, vertical, or 45° — is purely a `BoardView` rendering concern (`RouteGeometry.octilinearWaypoints`): for each pair of adjacent tiles, if their direct line isn't already one of those angles, insert one bend point (a diagonal run covering however much of the gap is shared between both axes, then a straight run covering the rest). Any two points can always be connected this way with exactly one bend, so every segment actually drawn is clean while the tiles themselves stay at their real, city-shaped positions. The route is drawn thick (`routeThickness`) and semi-transparent, like a colored transit line, with each tile's chip sitting opaquely on top of it as a "stop."
 
 ## Known simplifications
 
-- The board's overall shape is a schematic 8-way star, not a trace of the city's actual outline — a deliberate trade for a clean, non-overlapping diagram (the explicit ask that motivated this design), the same trade the real Tube map makes for legibility over geographic accuracy.
+- The path follows the *order* real roads/stations/landmarks were selected in (see "Rank & select" above), not real road-network connectivity — it won't retrace an actual street turn-by-turn, just approximate the city's overall shape.
+- The declutter pass is a local nudge (pairwise repulsion), not a full layout optimizer — very dense clusters of real places can still end up visually tight, just no longer exactly overlapping.
 - Color groups are still assigned by position in the angle-sorted slot sequence, not true geographic clustering (e.g. "these 3 roads are all in the same neighborhood"). A real neighborhood-clustering pass (e.g. using OSM `place`/`suburb` boundaries) would be a nice future improvement, isolated entirely to `BoardLayoutBuilder`.
-- No terrain/landmass art — just the path line and tile chips (placeholder-tier, like everything else `RichmanAssetsKit` hasn't been given real art for yet).
+- No terrain/landmass art — just the route line and tile chips (placeholder-tier, like everything else `RichmanAssetsKit` hasn't been given real art for yet). Every segment currently renders in one color; giving each real road its own route color (more literally "each road is its own line," Tube-map style) is a natural follow-up, isolated to `BoardView`.
 
 ## Offline / bundled cities
 

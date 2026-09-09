@@ -29,7 +29,11 @@ struct TileView: View {
         }
         .padding(2)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.gray.opacity(tileState.isMortgaged ? 0.25 : 0.08))
+        // Opaque, not just a light tint: in geo-board mode this chip sits on
+        // top of a thick, semi-transparent route line (see BoardView) and
+        // needs to fully occlude it — a translucent tint would let the route
+        // color bleed through the text and look muddy.
+        .background(tileState.isMortgaged ? Color.gray.opacity(0.35) : Color(white: 0.97))
         .overlay(Rectangle().stroke(Color.gray.opacity(0.4), lineWidth: 0.5))
         .overlay(alignment: .top) {
             if let ownerColor {
