@@ -78,7 +78,7 @@ public struct GameRootView: View {
 
                 Button("Roll Dice") { viewModel.rollDice() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.pendingPurchaseTileID != nil)
+                    .disabled(viewModel.pendingPurchaseTileID != nil || viewModel.hasRolledThisTurn)
 
                 Button("End Turn") { viewModel.endTurn() }
                     .buttonStyle(.bordered)
