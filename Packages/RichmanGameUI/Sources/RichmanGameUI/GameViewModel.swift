@@ -36,6 +36,7 @@ public final class GameViewModel: ObservableObject {
 
     public var state: GameState? { engine?.state }
     public var pendingPurchasePrice: Int? { engine?.pendingPurchasePrice }
+    public var hasRolledThisTurn: Bool { engine?.hasRolledThisTurn ?? false }
 
     // MARK: - Setup
 

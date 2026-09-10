@@ -57,6 +57,34 @@ final class RichmanCoreTests: XCTestCase {
         XCTAssertEqual(engine.pendingPurchasePrice, 100)
     }
 
+    func testTakeTurnRefusesToRollAgainUntilEndTurn() {
+        let state = GameState(
+            board: TestBoard.make(),
+            players: [Player(name: "A", cash: 1_500), Player(name: "B", cash: 1_500)],
+            chanceDeck: CardDeck(cards: [.collect(0)]),
+            communityChestDeck: CardDeck(cards: [.collect(0)])
+        )
+        let engine = GameEngine(state: state, diceRoller: ScriptedDiceRoller(rolls: [DiceRoll(die1: 2, die2: 3)]))
+
+        let firstEvents = engine.takeTurn()
+        XCTAssertFalse(firstEvents.isEmpty)
+        let positionAfterFirstRoll = engine.state.players[0].position
+
+        // A second roll in the same turn must be a no-op: no events, no further movement —
+        // otherwise a player could click "Roll Dice" repeatedly and walk around the board
+        // before ever ending their turn.
+        let secondEvents = engine.takeTurn()
+        XCTAssertTrue(secondEvents.isEmpty, "a second roll in the same turn should do nothing")
+        XCTAssertEqual(engine.state.players[0].position, positionAfterFirstRoll)
+
+        engine.endTurn()
+        engine.endTurn() // back to A
+
+        // After ending the turn (and cycling back around), rolling again works normally.
+        let thirdEvents = engine.takeTurn()
+        XCTAssertFalse(thirdEvents.isEmpty, "rolling should work again once it's actually a new turn")
+    }
+
     func testPurchasingPendingTileTransfersOwnershipAndCash() {
         let state = GameState(
             board: TestBoard.make(),
@@ -239,11 +267,19 @@ final class RichmanCoreTests: XCTestCase {
         let nonDouble = DiceRoll(die1: 2, die2: 3)
         let engine = GameEngine(state: state, diceRoller: ScriptedDiceRoller(rolls: [nonDouble]))
 
-        engine.takeTurn() // attempt 1: remaining 3 -> 2
+        engine.takeTurn() // A, attempt 1: remaining 3 -> 2
         XCTAssertTrue(engine.state.players[0].isInJail)
-        engine.takeTurn() // attempt 2: remaining 2 -> 1
+        engine.endTurn() // -> B
+        engine.takeTurn() // B's (unrelated) turn
+        engine.endTurn() // -> A
+
+        engine.takeTurn() // A, attempt 2: remaining 2 -> 1
         XCTAssertTrue(engine.state.players[0].isInJail)
-        let finalEvents = engine.takeTurn() // attempt 3: forced fine, released, no movement
+        engine.endTurn() // -> B
+        engine.takeTurn() // B's (unrelated) turn
+        engine.endTurn() // -> A
+
+        let finalEvents = engine.takeTurn() // A, attempt 3: forced fine, released, no movement
 
         XCTAssertFalse(engine.state.players[0].isInJail)
         XCTAssertEqual(engine.state.players[0].position, 5, "should not move on the turn it pays the forced fine")

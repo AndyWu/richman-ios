@@ -20,6 +20,13 @@ public final class GameEngine {
     /// ownable tile. `endTurn()` refuses to advance while this is non-nil.
     public private(set) var pendingPurchaseTileID: Int?
 
+    /// Set as soon as the current player rolls; `takeTurn()` refuses to roll
+    /// again until `endTurn()` resets it for the next player. Without this,
+    /// nothing stopped a player from calling `takeTurn()` repeatedly in a
+    /// single turn and walking all the way around the board before ever
+    /// ending it.
+    public private(set) var hasRolledThisTurn = false
+
     public init(state: GameState, diceRoller: DiceRoller = SystemDiceRoller()) {
         self.state = state
         self.diceRoller = diceRoller
@@ -33,10 +40,11 @@ public final class GameEngine {
 
     @discardableResult
     public func takeTurn() -> [GameEvent] {
-        guard !state.isGameOver, pendingPurchaseTileID == nil else { return [] }
+        guard !state.isGameOver, pendingPurchaseTileID == nil, !hasRolledThisTurn else { return [] }
         let playerIndex = state.currentPlayerIndex
         let playerID = state.players[playerIndex].id
 
+        hasRolledThisTurn = true
         let roll = diceRoller.roll()
         var events: [GameEvent] = [.diceRolled(playerID: playerID, roll: roll)]
 
@@ -132,6 +140,7 @@ public final class GameEngine {
             nextIndex = (nextIndex + 1) % count
         } while state.players[nextIndex].isBankrupt && nextIndex != state.currentPlayerIndex
         state.currentPlayerIndex = nextIndex
+        hasRolledThisTurn = false
         return [.turnEnded(nextPlayerID: state.players[nextIndex].id)]
     }
 

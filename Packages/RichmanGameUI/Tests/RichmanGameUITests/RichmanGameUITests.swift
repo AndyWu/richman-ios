@@ -143,6 +143,30 @@ final class RichmanGameUITests: XCTestCase {
         XCTAssertFalse(viewModel.eventLog.isEmpty)
     }
 
+    func testRollDiceOnlyMovesOncePerTurnEvenIfCalledRepeatedly() async {
+        let viewModel = GameViewModel(
+            cityDataProvider: MockCityDataProvider(),
+            // Total 4 lands on the standard board's tax tile (index 4) — no
+            // purchase dialog, no card draw, so nothing blocks endTurn().
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 3)]) }
+        )
+        await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
+
+        XCTAssertFalse(viewModel.hasRolledThisTurn)
+        viewModel.rollDice()
+        XCTAssertTrue(viewModel.hasRolledThisTurn)
+        let positionAfterFirstRoll = viewModel.state?.players[0].position
+
+        // Simulates the reported bug: tapping "Roll Dice" again before "End Turn".
+        viewModel.rollDice()
+        viewModel.rollDice()
+
+        XCTAssertEqual(viewModel.state?.players[0].position, positionAfterFirstRoll, "repeated rolls in one turn must not move the player further")
+
+        viewModel.endTurn()
+        XCTAssertFalse(viewModel.hasRolledThisTurn, "a fresh turn should allow rolling again")
+    }
+
     func testBuyingPendingTileClearsPendingState() async {
         let viewModel = GameViewModel(
             cityDataProvider: MockCityDataProvider(),
