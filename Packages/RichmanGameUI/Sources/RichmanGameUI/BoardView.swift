@@ -110,8 +110,9 @@ public struct BoardView: View {
     private var geoBody: some View {
         GeometryReader { proxy in
             let size = proxy.size
+            let points = geoPositions(in: size)
             ZStack(alignment: .topLeading) {
-                ForEach(routeSegments(in: size)) { segment in
+                ForEach(routeSegments(points: points)) { segment in
                     segment.path.stroke(
                         segment.color.opacity(0.55),
                         style: StrokeStyle(lineWidth: routeThickness, lineCap: .round, lineJoin: .round)
@@ -126,13 +127,40 @@ public struct BoardView: View {
                     }
                 }
                 ForEach(board.tiles) { tile in
-                    geoTileView(for: tile, in: size)
+                    geoTileView(for: tile, points: points)
                 }
                 ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
-                    geoTokenView(for: player, index: index, in: size)
+                    geoTokenView(for: player, index: index, points: points)
                 }
             }
             .frame(width: size.width, height: size.height)
+        }
+    }
+
+    /// Every tile's real `mapPosition` scaled to `size`, then pushed apart
+    /// just enough that no two tile chips overlap. Real geography routinely
+    /// puts two tiles' raw positions within a few points of each other (two
+    /// stops on the same corner, say) — with tile chips rendered at a fixed
+    /// `geoTileSize` that reads as a pile of overlapping labels, so this
+    /// keeps each tile's *direction* from the others but enforces a minimum
+    /// separation. Routes, tile chips and tokens all read from this same
+    /// array so the road segments still connect to where the chips actually
+    /// ended up.
+    private func geoPositions(in size: CGSize) -> [CGPoint] {
+        guard board.tiles.allSatisfy({ $0.mapPosition != nil }) else { return [] }
+        let margin = geoTileSize / 2 + 6
+        let usableWidth = max(size.width - margin * 2, 1)
+        let usableHeight = max(size.height - margin * 2, 1)
+        let raw = board.tiles.map { tile -> CGPoint in
+            let position = tile.mapPosition!
+            return CGPoint(x: margin + CGFloat(position.x) * usableWidth, y: margin + CGFloat(position.y) * usableHeight)
+        }
+        let spaced = RouteGeometry.declutteredPositions(raw, minDistance: geoTileSize * 1.25)
+        return spaced.map {
+            CGPoint(
+                x: min(max($0.x, margin), size.width - margin),
+                y: min(max($0.y, margin), size.height - margin)
+            )
         }
     }
 
@@ -147,11 +175,7 @@ public struct BoardView: View {
         let stops: [CGPoint]
     }
 
-    private func routeSegments(in size: CGSize) -> [RouteSegment] {
-        let points = board.tiles.compactMap { tile -> CGPoint? in
-            guard let position = tile.mapPosition else { return nil }
-            return CGPoint(x: position.x * size.width, y: position.y * size.height)
-        }
+    private func routeSegments(points: [CGPoint]) -> [RouteSegment] {
         guard points.count == board.tiles.count else { return [] }
 
         return points.indices.map { index in
@@ -177,8 +201,9 @@ public struct BoardView: View {
     }
 
     @ViewBuilder
-    private func geoTileView(for tile: Tile, in size: CGSize) -> some View {
-        if let position = tile.mapPosition {
+    private func geoTileView(for tile: Tile, points: [CGPoint]) -> some View {
+        if points.indices.contains(tile.id) {
+            let point = points[tile.id]
             TileView(
                 tile: tile,
                 tileState: tileStates[tile.id],
@@ -186,20 +211,21 @@ public struct BoardView: View {
                 assetProvider: assetProvider
             )
             .frame(width: geoTileSize, height: geoTileSize)
-            .position(x: position.x * size.width, y: position.y * size.height)
+            .position(point)
             .contentShape(Rectangle())
             .onTapGesture { onTileTapped(tile.id) }
         }
     }
 
     @ViewBuilder
-    private func geoTokenView(for player: Player, index: Int, in size: CGSize) -> some View {
-        if let position = board.tile(at: player.position).mapPosition {
+    private func geoTokenView(for player: Player, index: Int, points: [CGPoint]) -> some View {
+        if points.indices.contains(player.position) {
+            let point = points[player.position]
             let jitter = CGFloat(index % 4)
             let dx = (jitter.truncatingRemainder(dividingBy: 2) - 0.5) * geoTileSize * 0.6
             let dy = ((jitter / 2).rounded(.down) - 0.5) * geoTileSize * 0.6
             tokenCircle(index: index, isBankrupt: player.isBankrupt, diameter: geoTileSize * 0.32)
-                .position(x: position.x * size.width + dx, y: position.y * size.height + dy)
+                .position(x: point.x + dx, y: point.y + dy)
         }
     }
 
@@ -253,6 +279,52 @@ enum RouteGeometry {
             y: start.y + (dy < 0 ? -diagonal : diagonal)
         )
         return [bend, end]
+    }
+
+    /// Pushes points apart pairwise until every pair is at least
+    /// `minDistance` apart, moving each point in the pair equally so the
+    /// overall cloud drifts as little as possible from the real geography.
+    /// A fixed iteration count (rather than looping until settled) keeps
+    /// this a pure, deterministic function of the input — same points in,
+    /// same points out, every render — which matters here since it re-runs
+    /// on every SwiftUI body evaluation.
+    static func declutteredPositions(_ rawPositions: [CGPoint], minDistance: CGFloat, iterations: Int = 40) -> [CGPoint] {
+        guard minDistance > 0, rawPositions.count > 1 else { return rawPositions }
+        var points = rawPositions
+
+        for _ in 0..<iterations {
+            var anyOverlap = false
+            for i in points.indices {
+                for j in points.indices where j > i {
+                    let dx = points[j].x - points[i].x
+                    let dy = points[j].y - points[i].y
+                    let distance = hypot(dx, dy)
+                    guard distance < minDistance else { continue }
+                    anyOverlap = true
+
+                    let (unitX, unitY): (CGFloat, CGFloat)
+                    if distance > 0.0001 {
+                        unitX = dx / distance
+                        unitY = dy / distance
+                    } else {
+                        // Exactly coincident points have no direction to separate
+                        // along — pick a deterministic one from their indices so
+                        // they don't stay stuck on top of each other.
+                        let angle = CGFloat(i * 41 + j * 17).truncatingRemainder(dividingBy: 360) * .pi / 180
+                        unitX = cos(angle)
+                        unitY = sin(angle)
+                    }
+
+                    let shift = (minDistance - distance) / 2
+                    points[i].x -= unitX * shift
+                    points[i].y -= unitY * shift
+                    points[j].x += unitX * shift
+                    points[j].y += unitY * shift
+                }
+            }
+            if !anyOverlap { break }
+        }
+        return points
     }
 
     /// A distinct, deterministic color per tile index, stepped by the golden
