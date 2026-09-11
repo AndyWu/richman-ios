@@ -97,6 +97,34 @@ final class RichmanGameUITests: XCTestCase {
         XCTAssertEqual(stops.map(\.x), stops.map(\.x).sorted())
     }
 
+    func testDeclutteredPositionsSeparatesCoincidentAndNearbyPoints() {
+        let points = [
+            CGPoint(x: 100, y: 100),
+            CGPoint(x: 100, y: 100), // exactly coincident with the above
+            CGPoint(x: 105, y: 102), // just a few points from the above two
+            CGPoint(x: 500, y: 500), // already far from everything else
+        ]
+
+        let spaced = RouteGeometry.declutteredPositions(points, minDistance: 40)
+
+        for i in spaced.indices {
+            for j in spaced.indices where j > i {
+                let distance = hypot(spaced[j].x - spaced[i].x, spaced[j].y - spaced[i].y)
+                XCTAssertGreaterThanOrEqual(distance, 40 - 0.01, "points \(i) and \(j) ended up only \(distance)pt apart")
+            }
+        }
+        // The already-isolated point shouldn't have been dragged elsewhere.
+        XCTAssertEqual(spaced[3], CGPoint(x: 500, y: 500))
+    }
+
+    func testDeclutteredPositionsLeavesAlreadySpacedPointsUntouched() {
+        let points = [CGPoint(x: 0, y: 0), CGPoint(x: 200, y: 0), CGPoint(x: 0, y: 200)]
+
+        let spaced = RouteGeometry.declutteredPositions(points, minDistance: 40)
+
+        XCTAssertEqual(spaced, points)
+    }
+
     // MARK: - GameViewModel
 
     func testStartGameWithNoCityUsesStandardBoard() async {
