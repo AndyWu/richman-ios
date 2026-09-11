@@ -232,10 +232,11 @@ public struct BoardView: View {
                 id: index,
                 path: path,
                 color: RouteGeometry.routeColor(forTileIndex: index),
-                // A little over two tile-widths of empty road before a stop appears —
-                // short hops between neighboring tiles stay bare, only genuinely long
-                // real-world gaps get intermediate stops.
-                stops: RouteGeometry.intermediateStops(from: start, to: end, spacing: geoTileSize * 2.2)
+                // About one tile-width of road between stops — with tiles
+                // now spaced at least a full chip-width apart (see
+                // `geoPositions`), this puts a stop on most legs instead of
+                // reserving them for unusually long real-world gaps.
+                stops: RouteGeometry.intermediateStops(from: start, to: end, spacing: geoTileSize * 1.1)
             )
         }
     }
