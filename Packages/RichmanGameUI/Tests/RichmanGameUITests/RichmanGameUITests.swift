@@ -125,6 +125,36 @@ final class RichmanGameUITests: XCTestCase {
         XCTAssertEqual(spaced, points)
     }
 
+    func testDeclutteredPositionsRespectsBoundsWhileStayingSeparated() {
+        // A tight cluster jammed into a corner: there's only just enough
+        // room in `bounds` to keep all four points the minimum distance
+        // apart, so this also exercises the re-clamp-every-iteration path.
+        let points = [
+            CGPoint(x: 5, y: 5), CGPoint(x: 5, y: 5), CGPoint(x: 6, y: 5), CGPoint(x: 5, y: 6),
+        ]
+        let bounds = CGRect(x: 0, y: 0, width: 200, height: 200)
+
+        let spaced = RouteGeometry.declutteredPositions(points, minDistance: 40, bounds: bounds)
+
+        for point in spaced {
+            XCTAssertTrue(bounds.contains(point), "\(point) fell outside the allowed bounds")
+        }
+        for i in spaced.indices {
+            for j in spaced.indices where j > i {
+                let distance = hypot(spaced[j].x - spaced[i].x, spaced[j].y - spaced[i].y)
+                XCTAssertGreaterThanOrEqual(distance, 40 - 0.01, "points \(i) and \(j) ended up only \(distance)pt apart")
+            }
+        }
+    }
+
+    // MARK: - GameViewModel.hopPath
+
+    func testHopPathWalksForwardOneTileAtATimeWithWraparound() {
+        XCTAssertEqual(GameViewModel.hopPath(from: 5, to: 8, tileCount: 40), [6, 7, 8])
+        XCTAssertEqual(GameViewModel.hopPath(from: 38, to: 2, tileCount: 40), [39, 0, 1, 2], "should wrap past the last tile back to 0")
+        XCTAssertEqual(GameViewModel.hopPath(from: 5, to: 5, tileCount: 40), [5], "landing back on the same tile still yields one step")
+    }
+
     // MARK: - GameViewModel
 
     func testStartGameWithNoCityUsesStandardBoard() async {
@@ -161,11 +191,13 @@ final class RichmanGameUITests: XCTestCase {
     func testRollDiceProducesEventLogAndTracksLastRoll() async {
         let viewModel = GameViewModel(
             cityDataProvider: MockCityDataProvider(),
-            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 2, die2: 3)]) }
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 2, die2: 3)]) },
+            hopStepDuration: 0,
+            zoomSettleDuration: 0
         )
         await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
 
-        viewModel.rollDice()
+        await viewModel.rollDice()
 
         XCTAssertEqual(viewModel.lastRoll, DiceRoll(die1: 2, die2: 3))
         XCTAssertFalse(viewModel.eventLog.isEmpty)
@@ -176,18 +208,20 @@ final class RichmanGameUITests: XCTestCase {
             cityDataProvider: MockCityDataProvider(),
             // Total 4 lands on the standard board's tax tile (index 4) — no
             // purchase dialog, no card draw, so nothing blocks endTurn().
-            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 3)]) }
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 3)]) },
+            hopStepDuration: 0,
+            zoomSettleDuration: 0
         )
         await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
 
         XCTAssertFalse(viewModel.hasRolledThisTurn)
-        viewModel.rollDice()
+        await viewModel.rollDice()
         XCTAssertTrue(viewModel.hasRolledThisTurn)
         let positionAfterFirstRoll = viewModel.state?.players[0].position
 
         // Simulates the reported bug: tapping "Roll Dice" again before "End Turn".
-        viewModel.rollDice()
-        viewModel.rollDice()
+        await viewModel.rollDice()
+        await viewModel.rollDice()
 
         XCTAssertEqual(viewModel.state?.players[0].position, positionAfterFirstRoll, "repeated rolls in one turn must not move the player further")
 
@@ -198,16 +232,35 @@ final class RichmanGameUITests: XCTestCase {
     func testBuyingPendingTileClearsPendingState() async {
         let viewModel = GameViewModel(
             cityDataProvider: MockCityDataProvider(),
-            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) } // moves onto a property tile
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) }, // moves onto a property tile
+            hopStepDuration: 0,
+            zoomSettleDuration: 0
         )
         await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
 
-        viewModel.rollDice()
+        await viewModel.rollDice()
         XCTAssertNotNil(viewModel.pendingPurchaseTileID)
 
         viewModel.buyPendingTile()
 
         XCTAssertNil(viewModel.pendingPurchaseTileID)
+    }
+
+    func testRollDiceAnimatesThenSettlesCameraAndPendingPurchase() async {
+        let viewModel = GameViewModel(
+            cityDataProvider: MockCityDataProvider(),
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) }, // lands on a property tile
+            hopStepDuration: 0,
+            zoomSettleDuration: 0
+        )
+        await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
+
+        await viewModel.rollDice()
+
+        XCTAssertNil(viewModel.cameraFocusTileID, "camera should be back at the overview once the move finishes")
+        XCTAssertFalse(viewModel.isAnimatingMove)
+        XCTAssertNotNil(viewModel.pendingPurchaseTileID, "the purchase prompt should only appear once the token has finished moving")
+        XCTAssertEqual(viewModel.displayPlayers, viewModel.state?.players ?? [], "once settled, the displayed positions should match the real ones")
     }
 
     func testEndTurnAdvancesCurrentPlayer() async {

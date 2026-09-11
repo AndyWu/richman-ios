@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import RichmanCore
 import RichmanCityData
 import RichmanAssetsKit
@@ -16,27 +17,60 @@ public final class GameViewModel: ObservableObject {
     @Published public private(set) var eventLog: [String] = []
     @Published public private(set) var pendingPurchaseTileID: Int?
     @Published public private(set) var lastRoll: DiceRoll?
+    /// Non-nil while a roll's movement is being animated — the moving
+    /// player's real `position` (already updated by the engine) is hidden
+    /// behind this until the token visually finishes hopping there.
+    @Published public private(set) var animatingPlayerID: Player.ID?
+    @Published public private(set) var animatedPosition: Int?
+    /// The tile the board should be zoomed in on (level 1), or `nil` for the
+    /// whole-board overview (level 0). Set by `rollDice()` for the duration
+    /// of the move; `nil` the rest of the time.
+    @Published public private(set) var cameraFocusTileID: Int?
 
     public private(set) var engine: GameEngine?
     public let assetProvider: AssetProvider
     private let cityDataProvider: CityDataProvider
     private let makeDiceRoller: () -> DiceRoller
+    private let hopStepDuration: TimeInterval
+    private let zoomSettleDuration: TimeInterval
 
     /// `makeDiceRoller` defaults to the real `SystemDiceRoller`; tests pass a
     /// `ScriptedDiceRoller` factory to drive the engine deterministically.
+    /// `hopStepDuration`/`zoomSettleDuration` default to real animation
+    /// timings; tests pass `0` so `rollDice()` settles immediately instead
+    /// of waiting out the animation in real time.
     public init(
         cityDataProvider: CityDataProvider,
         assetProvider: AssetProvider = PlaceholderAssetProvider(),
-        makeDiceRoller: @escaping () -> DiceRoller = { SystemDiceRoller() }
+        makeDiceRoller: @escaping () -> DiceRoller = { SystemDiceRoller() },
+        hopStepDuration: TimeInterval = 0.22,
+        zoomSettleDuration: TimeInterval = 0.35
     ) {
         self.cityDataProvider = cityDataProvider
         self.assetProvider = assetProvider
         self.makeDiceRoller = makeDiceRoller
+        self.hopStepDuration = hopStepDuration
+        self.zoomSettleDuration = zoomSettleDuration
     }
 
     public var state: GameState? { engine?.state }
     public var pendingPurchasePrice: Int? { engine?.pendingPurchasePrice }
     public var hasRolledThisTurn: Bool { engine?.hasRolledThisTurn ?? false }
+    public var isAnimatingMove: Bool { animatingPlayerID != nil }
+
+    /// `state.players`, except the currently-animating player's position is
+    /// replaced with wherever the hop animation has visually gotten to.
+    /// `BoardView` should render this instead of `state.players` directly.
+    public var displayPlayers: [Player] {
+        guard let state else { return [] }
+        guard let animatingPlayerID, let animatedPosition else { return state.players }
+        return state.players.map { player in
+            guard player.id == animatingPlayerID else { return player }
+            var moved = player
+            moved.position = animatedPosition
+            return moved
+        }
+    }
 
     // MARK: - Setup
 
@@ -69,8 +103,81 @@ public final class GameViewModel: ObservableObject {
 
     // MARK: - Turn actions
 
-    public func rollDice() {
-        mutate { engine in engine.takeTurn() }
+    /// Rolls, applies the turn, then animates the token hopping tile-by-tile
+    /// from where it started to wherever the dice roll landed it — zooming
+    /// the board in for the move and back out to the overview once it's
+    /// done. `pendingPurchaseTileID` (which drives the buy/skip prompt) is
+    /// only published once the animation finishes, so the prompt doesn't
+    /// appear before the token visually arrives.
+    public func rollDice() async {
+        guard let engine, animatingPlayerID == nil else { return }
+        let playerIndex = engine.state.currentPlayerIndex
+        let playerID = engine.state.players[playerIndex].id
+        let startPosition = engine.state.players[playerIndex].position
+        let tileCount = engine.state.board.tileCount
+
+        objectWillChange.send()
+        let events = engine.takeTurn()
+        for event in events {
+            if case .diceRolled(_, let roll) = event { lastRoll = roll }
+            eventLog.append(describe(event))
+        }
+
+        let primaryMove = events.first { event -> Bool in
+            if case .playerMoved(let movedPlayerID, _, _, _) = event { return movedPlayerID == playerID }
+            return false
+        }
+        guard case .some(.playerMoved(_, _, let destination, _)) = primaryMove else {
+            // No movement this roll (e.g. still in jail) — nothing to animate.
+            pendingPurchaseTileID = engine.pendingPurchaseTileID
+            return
+        }
+
+        await animateHop(playerID: playerID, from: startPosition, to: destination, tileCount: tileCount)
+        pendingPurchaseTileID = engine.pendingPurchaseTileID
+    }
+
+    private func animateHop(playerID: Player.ID, from: Int, to: Int, tileCount: Int) async {
+        let path = Self.hopPath(from: from, to: to, tileCount: tileCount)
+        guard !path.isEmpty else { return }
+
+        animatingPlayerID = playerID
+        animatedPosition = from
+
+        for tile in path {
+            withAnimation(.easeInOut(duration: hopStepDuration)) {
+                animatedPosition = tile
+                cameraFocusTileID = tile
+            }
+            if hopStepDuration > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(hopStepDuration * 1_000_000_000))
+            }
+        }
+
+        withAnimation(.easeInOut(duration: zoomSettleDuration)) {
+            cameraFocusTileID = nil
+        }
+        if zoomSettleDuration > 0 {
+            try? await Task.sleep(nanoseconds: UInt64(zoomSettleDuration * 1_000_000_000))
+        }
+
+        animatingPlayerID = nil
+        animatedPosition = nil
+    }
+
+    /// The sequence of tiles a token visually hops through moving forward
+    /// from `from` to `to` (wrapping past the last tile back to 0), one at a
+    /// time. `internal` (not private) so tests can verify it directly.
+    static func hopPath(from: Int, to: Int, tileCount: Int) -> [Int] {
+        guard tileCount > 0 else { return [] }
+        guard from != to else { return [to] }
+        var path: [Int] = []
+        var current = from
+        while current != to {
+            current = (current + 1) % tileCount
+            path.append(current)
+        }
+        return path
     }
 
     public func buyPendingTile() {
