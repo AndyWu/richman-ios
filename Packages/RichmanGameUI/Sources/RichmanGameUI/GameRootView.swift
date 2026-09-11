@@ -29,14 +29,14 @@ public struct GameRootView: View {
     @ViewBuilder
     private func gameView(state: GameState, board: Board) -> some View {
         VStack(spacing: 12) {
+            turnControlBar(state: state)
+
             BoardView(
                 board: board,
                 tileStates: state.tileStates,
                 players: state.players,
                 assetProvider: viewModel.assetProvider
-            ) {
-                centerContent(state: state)
-            }
+            )
 
             PlayerHUDView(players: state.players, currentPlayerIndex: state.currentPlayerIndex, assetProvider: viewModel.assetProvider)
                 .padding(.horizontal)
@@ -60,22 +60,28 @@ public struct GameRootView: View {
         }
     }
 
+    /// Turn/dice/roll controls, rendered above the board rather than
+    /// floating over it — on a geo (real-city) board the board's middle is
+    /// full of routes and tiles, not empty space, so overlaying controls
+    /// there hid part of the map.
     @ViewBuilder
-    private func centerContent(state: GameState) -> some View {
-        VStack(spacing: 10) {
-            Text(state.isGameOver ? "Game Over" : "\(state.currentPlayer.name)'s turn")
-                .font(.headline)
-                .multilineTextAlignment(.center)
-
-            DiceView(roll: viewModel.lastRoll, assetProvider: viewModel.assetProvider)
-
-            if !state.isGameOver {
-                if state.currentPlayer.isInJail {
+    private func turnControlBar(state: GameState) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(state.isGameOver ? "Game Over" : "\(state.currentPlayer.name)'s turn")
+                    .font(.headline)
+                if !state.isGameOver, state.currentPlayer.isInJail {
                     Button("Pay $50 to leave jail") { viewModel.payToLeaveJail() }
                         .buttonStyle(.bordered)
                         .font(.caption)
                 }
+            }
 
+            Spacer(minLength: 8)
+
+            DiceView(roll: viewModel.lastRoll, assetProvider: viewModel.assetProvider)
+
+            if !state.isGameOver {
                 Button("Roll Dice") { viewModel.rollDice() }
                     .buttonStyle(.borderedProminent)
                     .disabled(viewModel.pendingPurchaseTileID != nil || viewModel.hasRolledThisTurn)
@@ -85,7 +91,9 @@ public struct GameRootView: View {
                     .disabled(viewModel.pendingPurchaseTileID != nil)
             }
         }
-        .padding(8)
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var eventLogView: some View {
