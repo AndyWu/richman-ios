@@ -22,22 +22,45 @@ public struct BoardView: View {
     let players: [Player]
     let assetProvider: AssetProvider
     let onTileTapped: (Int) -> Void
+    /// `nil` (level 0) shows the whole board, as always. A tile ID (level 1)
+    /// zooms in and pans so that tile is centered — the caller animates this
+    /// with `withAnimation` around the state change, so the transform here
+    /// just needs to be a pure, continuous function of the value.
+    let cameraFocusTileID: Int?
 
     private let geoTileSize: CGFloat = 38
     private let routeThickness: CGFloat = 12
+    private let zoomedInScale: CGFloat = 2.4
 
     public init(
         board: Board,
         tileStates: [TileState],
         players: [Player],
         assetProvider: AssetProvider,
+        cameraFocusTileID: Int? = nil,
         onTileTapped: @escaping (Int) -> Void = { _ in }
     ) {
         self.board = board
         self.tileStates = tileStates
         self.players = players
         self.assetProvider = assetProvider
+        self.cameraFocusTileID = cameraFocusTileID
         self.onTileTapped = onTileTapped
+    }
+
+    /// Scale and top-leading-anchored offset that zoom the canvas in on
+    /// `focusPoint`, or the identity transform when there's no focus (level
+    /// 0). Expressed this way (rather than toggling between two discrete
+    /// view trees) so `withAnimation` at the call site can interpolate
+    /// smoothly between "whole board" and "zoomed on this tile" — and,
+    /// tile-to-tile, pan smoothly as the focus point changes.
+    private func zoomTransform(canvasSize: CGSize, focusPoint: CGPoint?) -> (scale: CGFloat, offset: CGSize) {
+        guard let focusPoint else { return (1, .zero) }
+        let center = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+        return (
+            zoomedInScale,
+            CGSize(width: center.x - focusPoint.x * zoomedInScale, height: center.y - focusPoint.y * zoomedInScale)
+        )
     }
 
     private var isGeoBoard: Bool {
@@ -67,6 +90,11 @@ public struct BoardView: View {
                 GeometryReader { proxy in
                     let side = min(proxy.size.width, proxy.size.height)
                     let cell = side / CGFloat(BoardLayoutMath.gridSize)
+                    let focusPoint: CGPoint? = cameraFocusTileID.map { tileID in
+                        let position = BoardLayoutMath.gridPosition(forTileIndex: tileID)
+                        return CGPoint(x: CGFloat(position.col) * cell + cell / 2, y: CGFloat(position.row) * cell + cell / 2)
+                    }
+                    let (scale, offset) = zoomTransform(canvasSize: CGSize(width: side, height: side), focusPoint: focusPoint)
 
                     ZStack(alignment: .topLeading) {
                         ForEach(board.tiles) { tile in
@@ -77,6 +105,10 @@ public struct BoardView: View {
                         }
                     }
                     .frame(width: side, height: side)
+                    .scaleEffect(scale, anchor: .topLeading)
+                    .offset(offset)
+                    .frame(width: side, height: side, alignment: .topLeading)
+                    .clipped()
                 }
             }
     }
@@ -111,6 +143,9 @@ public struct BoardView: View {
         GeometryReader { proxy in
             let size = proxy.size
             let points = geoPositions(in: size)
+            let focusPoint: CGPoint? = cameraFocusTileID.flatMap { points.indices.contains($0) ? points[$0] : nil }
+            let (scale, offset) = zoomTransform(canvasSize: size, focusPoint: focusPoint)
+
             ZStack(alignment: .topLeading) {
                 ForEach(routeSegments(points: points)) { segment in
                     segment.path.stroke(
@@ -134,18 +169,23 @@ public struct BoardView: View {
                 }
             }
             .frame(width: size.width, height: size.height)
+            .scaleEffect(scale, anchor: .topLeading)
+            .offset(offset)
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .clipped()
         }
     }
 
     /// Every tile's real `mapPosition` scaled to `size`, then pushed apart
-    /// just enough that no two tile chips overlap. Real geography routinely
-    /// puts two tiles' raw positions within a few points of each other (two
-    /// stops on the same corner, say) — with tile chips rendered at a fixed
-    /// `geoTileSize` that reads as a pile of overlapping labels, so this
-    /// keeps each tile's *direction* from the others but enforces a minimum
-    /// separation. Routes, tile chips and tokens all read from this same
-    /// array so the road segments still connect to where the chips actually
-    /// ended up.
+    /// so no two tile chips are closer than one full chip-width to each
+    /// other (i.e. at least a chip's own width of clear gap between their
+    /// edges). Real geography routinely puts two tiles' raw positions
+    /// within a few points of each other (two stops on the same corner,
+    /// say) — with tile chips rendered at a fixed `geoTileSize` that reads
+    /// as a pile of overlapping labels, so this keeps each tile's
+    /// *direction* from the others but enforces that minimum separation.
+    /// Routes, tile chips and tokens all read from this same array so the
+    /// road segments still connect to where the chips actually ended up.
     private func geoPositions(in size: CGSize) -> [CGPoint] {
         guard board.tiles.allSatisfy({ $0.mapPosition != nil }) else { return [] }
         let margin = geoTileSize / 2 + 6
@@ -155,13 +195,13 @@ public struct BoardView: View {
             let position = tile.mapPosition!
             return CGPoint(x: margin + CGFloat(position.x) * usableWidth, y: margin + CGFloat(position.y) * usableHeight)
         }
-        let spaced = RouteGeometry.declutteredPositions(raw, minDistance: geoTileSize * 1.25)
-        return spaced.map {
-            CGPoint(
-                x: min(max($0.x, margin), size.width - margin),
-                y: min(max($0.y, margin), size.height - margin)
-            )
-        }
+        let bounds = CGRect(
+            x: margin, y: margin,
+            width: max(size.width - margin * 2, 0), height: max(size.height - margin * 2, 0)
+        )
+        // Center-to-center distance of 2x the chip size leaves a full
+        // chip-width of clear edge-to-edge gap between any two chips.
+        return RouteGeometry.declutteredPositions(raw, minDistance: geoTileSize * 2, bounds: bounds)
     }
 
     /// One drawable piece of "road" per tile — the leg leaving that tile and
@@ -284,13 +324,31 @@ enum RouteGeometry {
     /// Pushes points apart pairwise until every pair is at least
     /// `minDistance` apart, moving each point in the pair equally so the
     /// overall cloud drifts as little as possible from the real geography.
-    /// A fixed iteration count (rather than looping until settled) keeps
-    /// this a pure, deterministic function of the input — same points in,
-    /// same points out, every render — which matters here since it re-runs
-    /// on every SwiftUI body evaluation.
-    static func declutteredPositions(_ rawPositions: [CGPoint], minDistance: CGFloat, iterations: Int = 40) -> [CGPoint] {
+    /// When `bounds` is given, every point is re-clamped inside it after
+    /// each pairwise pass (not just once at the end) — clamping only once
+    /// at the end can push a point back into another it had just been
+    /// separated from, right at the edge of the canvas. A fixed iteration
+    /// count (rather than looping until settled) keeps this a pure,
+    /// deterministic function of the input — same points in, same points
+    /// out, every render — which matters here since it re-runs on every
+    /// SwiftUI body evaluation.
+    static func declutteredPositions(
+        _ rawPositions: [CGPoint],
+        minDistance: CGFloat,
+        bounds: CGRect? = nil,
+        iterations: Int = 200
+    ) -> [CGPoint] {
         guard minDistance > 0, rawPositions.count > 1 else { return rawPositions }
-        var points = rawPositions
+
+        func clamp(_ point: CGPoint) -> CGPoint {
+            guard let bounds else { return point }
+            return CGPoint(
+                x: min(max(point.x, bounds.minX), bounds.maxX),
+                y: min(max(point.y, bounds.minY), bounds.maxY)
+            )
+        }
+
+        var points = rawPositions.map(clamp)
 
         for _ in 0..<iterations {
             var anyOverlap = false
@@ -322,6 +380,7 @@ enum RouteGeometry {
                     points[j].y += unitY * shift
                 }
             }
+            points = points.map(clamp)
             if !anyOverlap { break }
         }
         return points

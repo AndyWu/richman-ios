@@ -34,8 +34,9 @@ public struct GameRootView: View {
             BoardView(
                 board: board,
                 tileStates: state.tileStates,
-                players: state.players,
-                assetProvider: viewModel.assetProvider
+                players: viewModel.displayPlayers,
+                assetProvider: viewModel.assetProvider,
+                cameraFocusTileID: viewModel.cameraFocusTileID
             )
 
             PlayerHUDView(players: state.players, currentPlayerIndex: state.currentPlayerIndex, assetProvider: viewModel.assetProvider)
@@ -87,12 +88,13 @@ public struct GameRootView: View {
             DiceView(roll: viewModel.lastRoll, assetProvider: viewModel.assetProvider)
 
             if !state.isGameOver {
-                Button("Roll Dice") { viewModel.rollDice() }
+                Button("Roll Dice") { Task { await viewModel.rollDice() } }
                     .buttonStyle(.borderedProminent)
                     .disabled(viewModel.hasRolledThisTurn)
 
                 Button("End Turn") { viewModel.endTurn() }
                     .buttonStyle(.bordered)
+                    .disabled(viewModel.isAnimatingMove)
             }
         }
     }
