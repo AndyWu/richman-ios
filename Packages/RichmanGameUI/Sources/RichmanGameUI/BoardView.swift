@@ -11,16 +11,17 @@ import RichmanAssetsKit
 ///
 /// Purely a renderer — all game logic lives in `GameEngine`/`GameViewModel`;
 /// this view just draws `board`/`tileStates`/`players` and reports taps via
-/// `onTileTapped`. `centerContent` fills the open middle of the board (dice,
-/// current-turn info, roll button — supplied by the caller so this view
-/// stays reusable).
-public struct BoardView<CenterContent: View>: View {
+/// `onTileTapped`. Turn/dice controls used to float over the board's open
+/// middle, but on a geo board that middle isn't empty — it's covered in
+/// routes and tiles — so those controls now live outside this view entirely
+/// (see `GameRootView`), leaving `BoardView` free to use its full frame for
+/// the board itself.
+public struct BoardView: View {
     let board: Board
     let tileStates: [TileState]
     let players: [Player]
     let assetProvider: AssetProvider
     let onTileTapped: (Int) -> Void
-    let centerContent: () -> CenterContent
 
     private let geoTileSize: CGFloat = 38
     private let routeThickness: CGFloat = 12
@@ -30,15 +31,13 @@ public struct BoardView<CenterContent: View>: View {
         tileStates: [TileState],
         players: [Player],
         assetProvider: AssetProvider,
-        onTileTapped: @escaping (Int) -> Void = { _ in },
-        @ViewBuilder centerContent: @escaping () -> CenterContent
+        onTileTapped: @escaping (Int) -> Void = { _ in }
     ) {
         self.board = board
         self.tileStates = tileStates
         self.players = players
         self.assetProvider = assetProvider
         self.onTileTapped = onTileTapped
-        self.centerContent = centerContent
     }
 
     private var isGeoBoard: Bool {
@@ -76,12 +75,6 @@ public struct BoardView<CenterContent: View>: View {
                         ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
                             squareTokenView(for: player, index: index, cell: cell)
                         }
-                        centerContent()
-                            .frame(
-                                width: cell * CGFloat(BoardLayoutMath.gridSize - 2),
-                                height: cell * CGFloat(BoardLayoutMath.gridSize - 2)
-                            )
-                            .position(x: side / 2, y: side / 2)
                     }
                     .frame(width: side, height: side)
                 }
@@ -138,11 +131,6 @@ public struct BoardView<CenterContent: View>: View {
                 ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
                     geoTokenView(for: player, index: index, in: size)
                 }
-                centerContent()
-                    .padding(10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
-                    .frame(maxWidth: size.width * 0.42)
-                    .position(centroid(in: size))
             }
             .frame(width: size.width, height: size.height)
         }
@@ -213,17 +201,6 @@ public struct BoardView<CenterContent: View>: View {
             tokenCircle(index: index, isBankrupt: player.isBankrupt, diameter: geoTileSize * 0.32)
                 .position(x: position.x * size.width + dx, y: position.y * size.height + dy)
         }
-    }
-
-    /// Average of every tile's real position — for an angle-sorted loop this
-    /// naturally falls inside it, giving `centerContent` the same "middle of
-    /// the loop" placement the square mode gets from simple geometry.
-    private func centroid(in size: CGSize) -> CGPoint {
-        let positions = board.tiles.compactMap(\.mapPosition)
-        guard !positions.isEmpty else { return CGPoint(x: size.width / 2, y: size.height / 2) }
-        let averageX = positions.map(\.x).reduce(0, +) / Double(positions.count)
-        let averageY = positions.map(\.y).reduce(0, +) / Double(positions.count)
-        return CGPoint(x: averageX * size.width, y: averageY * size.height)
     }
 
     // MARK: - Shared
