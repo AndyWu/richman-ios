@@ -47,25 +47,30 @@ public struct GameRootView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .overlay {
-            if let tileID = viewModel.pendingPurchaseTileID, let price = viewModel.pendingPurchasePrice {
-                PropertyDialogView(
-                    tile: board.tile(at: tileID),
-                    price: price,
-                    playerCash: state.currentPlayer.cash,
-                    onBuy: { viewModel.buyPendingTile() },
-                    onDecline: { viewModel.declinePendingTile() }
-                )
-            }
-        }
     }
 
     /// Turn/dice/roll controls, rendered above the board rather than
     /// floating over it — on a geo (real-city) board the board's middle is
     /// full of routes and tiles, not empty space, so overlaying controls
-    /// there hid part of the map.
+    /// there hid part of the map. When a purchase is pending, this bar
+    /// swaps to the buy/skip prompt instead of stacking a second floating
+    /// dialog on top of the board (which had the same problem).
     @ViewBuilder
     private func turnControlBar(state: GameState) -> some View {
+        Group {
+            if let tileID = viewModel.pendingPurchaseTileID, let price = viewModel.pendingPurchasePrice {
+                purchasePrompt(tile: state.board.tile(at: tileID), price: price, playerCash: state.currentPlayer.cash)
+            } else {
+                turnControls(state: state)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func turnControls(state: GameState) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(state.isGameOver ? "Game Over" : "\(state.currentPlayer.name)'s turn")
@@ -84,16 +89,32 @@ public struct GameRootView: View {
             if !state.isGameOver {
                 Button("Roll Dice") { viewModel.rollDice() }
                     .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.pendingPurchaseTileID != nil || viewModel.hasRolledThisTurn)
+                    .disabled(viewModel.hasRolledThisTurn)
 
                 Button("End Turn") { viewModel.endTurn() }
                     .buttonStyle(.bordered)
-                    .disabled(viewModel.pendingPurchaseTileID != nil)
             }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private func purchasePrompt(tile: Tile, price: Int, playerCash: Int) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(tile.name)
+                    .font(.headline)
+                Text("$\(price)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            Button("Skip", role: .cancel) { viewModel.declinePendingTile() }
+            Button("Buy") { viewModel.buyPendingTile() }
+                .buttonStyle(.borderedProminent)
+                .disabled(playerCash < price)
+        }
     }
 
     private var eventLogView: some View {
