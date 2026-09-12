@@ -6,6 +6,46 @@ import RichmanCityData
 @MainActor
 final class RichmanGameUITests: XCTestCase {
 
+    // MARK: - SettingsStore
+
+    func testSettingsStoreDefaultsWhenNothingStored() {
+        let defaults = makeEphemeralDefaults()
+
+        let settings = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(settings.animationSpeed, .medium)
+        XCTAssertEqual(settings.theme, .system)
+        XCTAssertEqual(settings.soundVolume, 0.8)
+    }
+
+    func testSettingsStorePersistsChangesAcrossInstances() {
+        let defaults = makeEphemeralDefaults()
+        let settings = SettingsStore(defaults: defaults)
+
+        settings.animationSpeed = .fast
+        settings.theme = .dark
+        settings.soundVolume = 0.25
+
+        let reloaded = SettingsStore(defaults: defaults)
+        XCTAssertEqual(reloaded.animationSpeed, .fast)
+        XCTAssertEqual(reloaded.theme, .dark)
+        XCTAssertEqual(reloaded.soundVolume, 0.25)
+    }
+
+    func testAnimationSpeedFastIsQuickerThanSlow() {
+        XCTAssertLessThan(AnimationSpeed.fast.hopStepDuration, AnimationSpeed.medium.hopStepDuration)
+        XCTAssertLessThan(AnimationSpeed.medium.hopStepDuration, AnimationSpeed.slow.hopStepDuration)
+        XCTAssertLessThan(AnimationSpeed.fast.zoomSettleDuration, AnimationSpeed.medium.zoomSettleDuration)
+        XCTAssertLessThan(AnimationSpeed.medium.zoomSettleDuration, AnimationSpeed.slow.zoomSettleDuration)
+    }
+
+    private func makeEphemeralDefaults() -> UserDefaults {
+        let suiteName = "RichmanGameUITests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        addTeardownBlock { defaults.removePersistentDomain(forName: suiteName) }
+        return defaults
+    }
+
     // MARK: - BoardLayoutMath
 
     func testCornerTilesLandOnGridCorners() {
@@ -191,13 +231,11 @@ final class RichmanGameUITests: XCTestCase {
     func testRollDiceProducesEventLogAndTracksLastRoll() async {
         let viewModel = GameViewModel(
             cityDataProvider: MockCityDataProvider(),
-            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 2, die2: 3)]) },
-            hopStepDuration: 0,
-            zoomSettleDuration: 0
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 2, die2: 3)]) }
         )
         await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
 
-        await viewModel.rollDice()
+        await viewModel.rollDice(hopStepDuration: 0, zoomSettleDuration: 0)
 
         XCTAssertEqual(viewModel.lastRoll, DiceRoll(die1: 2, die2: 3))
         XCTAssertFalse(viewModel.eventLog.isEmpty)
@@ -208,20 +246,18 @@ final class RichmanGameUITests: XCTestCase {
             cityDataProvider: MockCityDataProvider(),
             // Total 4 lands on the standard board's tax tile (index 4) — no
             // purchase dialog, no card draw, so nothing blocks endTurn().
-            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 3)]) },
-            hopStepDuration: 0,
-            zoomSettleDuration: 0
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 3)]) }
         )
         await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
 
         XCTAssertFalse(viewModel.hasRolledThisTurn)
-        await viewModel.rollDice()
+        await viewModel.rollDice(hopStepDuration: 0, zoomSettleDuration: 0)
         XCTAssertTrue(viewModel.hasRolledThisTurn)
         let positionAfterFirstRoll = viewModel.state?.players[0].position
 
         // Simulates the reported bug: tapping "Roll Dice" again before "End Turn".
-        await viewModel.rollDice()
-        await viewModel.rollDice()
+        await viewModel.rollDice(hopStepDuration: 0, zoomSettleDuration: 0)
+        await viewModel.rollDice(hopStepDuration: 0, zoomSettleDuration: 0)
 
         XCTAssertEqual(viewModel.state?.players[0].position, positionAfterFirstRoll, "repeated rolls in one turn must not move the player further")
 
@@ -232,13 +268,11 @@ final class RichmanGameUITests: XCTestCase {
     func testBuyingPendingTileClearsPendingState() async {
         let viewModel = GameViewModel(
             cityDataProvider: MockCityDataProvider(),
-            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) }, // moves onto a property tile
-            hopStepDuration: 0,
-            zoomSettleDuration: 0
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) } // moves onto a property tile
         )
         await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
 
-        await viewModel.rollDice()
+        await viewModel.rollDice(hopStepDuration: 0, zoomSettleDuration: 0)
         XCTAssertNotNil(viewModel.pendingPurchaseTileID)
 
         viewModel.buyPendingTile()
@@ -249,18 +283,29 @@ final class RichmanGameUITests: XCTestCase {
     func testRollDiceAnimatesThenSettlesCameraAndPendingPurchase() async {
         let viewModel = GameViewModel(
             cityDataProvider: MockCityDataProvider(),
-            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) }, // lands on a property tile
-            hopStepDuration: 0,
-            zoomSettleDuration: 0
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) } // lands on a property tile
         )
         await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
 
-        await viewModel.rollDice()
+        await viewModel.rollDice(hopStepDuration: 0, zoomSettleDuration: 0)
 
         XCTAssertNil(viewModel.cameraFocusTileID, "camera should be back at the overview once the move finishes")
         XCTAssertFalse(viewModel.isAnimatingMove)
         XCTAssertNotNil(viewModel.pendingPurchaseTileID, "the purchase prompt should only appear once the token has finished moving")
         XCTAssertEqual(viewModel.displayPlayers, viewModel.state?.players ?? [], "once settled, the displayed positions should match the real ones")
+    }
+
+    func testRestartToCityPickerClearsGameState() async {
+        let viewModel = GameViewModel(cityDataProvider: MockCityDataProvider())
+        await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
+        XCTAssertNotNil(viewModel.state)
+
+        viewModel.restartToCityPicker()
+
+        XCTAssertNil(viewModel.state)
+        XCTAssertNil(viewModel.board)
+        XCTAssertTrue(viewModel.eventLog.isEmpty)
+        XCTAssertNil(viewModel.pendingPurchaseTileID)
     }
 
     func testEndTurnAdvancesCurrentPlayer() async {

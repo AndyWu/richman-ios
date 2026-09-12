@@ -9,21 +9,53 @@ import RichmanAssetsKit
 /// provider, a caching wrapper, or a mock (see `Docs/ARCHITECTURE.md`).
 public struct GameRootView: View {
     @StateObject private var viewModel: GameViewModel
+    @StateObject private var settings = SettingsStore()
+    @State private var isShowingSettings = false
 
     public init(cityDataProvider: CityDataProvider, assetProvider: AssetProvider = PlaceholderAssetProvider()) {
         _viewModel = StateObject(wrappedValue: GameViewModel(cityDataProvider: cityDataProvider, assetProvider: assetProvider))
     }
 
     public var body: some View {
-        Group {
-            if let state = viewModel.state, let board = viewModel.board {
-                gameView(state: state, board: board)
-            } else {
-                CityPickerView(isLoading: viewModel.isLoadingCity, message: viewModel.cityLoadMessage) { city, names in
-                    Task { await viewModel.startGame(cityName: city, playerNames: names) }
+        VStack(spacing: 0) {
+            // Its own row (not an overlay) so it never sits on top of the
+            // turn control bar's own trailing button ("End Turn") when a
+            // game is in progress.
+            HStack {
+                Spacer()
+                settingsButton
+            }
+
+            Group {
+                if let state = viewModel.state, let board = viewModel.board {
+                    gameView(state: state, board: board)
+                } else {
+                    CityPickerView(isLoading: viewModel.isLoadingCity, message: viewModel.cityLoadMessage) { city, names in
+                        Task { await viewModel.startGame(cityName: city, playerNames: names) }
+                    }
                 }
             }
         }
+        .preferredColorScheme(settings.theme.colorScheme)
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView(settings: settings, isGameInProgress: viewModel.state != nil) {
+                viewModel.restartToCityPicker()
+            }
+        }
+    }
+
+    private var settingsButton: some View {
+        Button {
+            isShowingSettings = true
+        } label: {
+            Image(systemName: "gearshape.fill")
+                .font(.title3)
+                .padding(10)
+                .background(.regularMaterial, in: Circle())
+        }
+        .padding(.trailing, 12)
+        .padding(.top, 4)
+        .accessibilityLabel("Settings")
     }
 
     @ViewBuilder
@@ -88,9 +120,16 @@ public struct GameRootView: View {
             DiceView(roll: viewModel.lastRoll, assetProvider: viewModel.assetProvider)
 
             if !state.isGameOver {
-                Button("Roll Dice") { Task { await viewModel.rollDice() } }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.hasRolledThisTurn)
+                Button("Roll Dice") {
+                    Task {
+                        await viewModel.rollDice(
+                            hopStepDuration: settings.animationSpeed.hopStepDuration,
+                            zoomSettleDuration: settings.animationSpeed.zoomSettleDuration
+                        )
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(viewModel.hasRolledThisTurn)
 
                 Button("End Turn") { viewModel.endTurn() }
                     .buttonStyle(.bordered)
