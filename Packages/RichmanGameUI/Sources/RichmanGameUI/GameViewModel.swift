@@ -31,26 +31,17 @@ public final class GameViewModel: ObservableObject {
     public let assetProvider: AssetProvider
     private let cityDataProvider: CityDataProvider
     private let makeDiceRoller: () -> DiceRoller
-    private let hopStepDuration: TimeInterval
-    private let zoomSettleDuration: TimeInterval
 
     /// `makeDiceRoller` defaults to the real `SystemDiceRoller`; tests pass a
     /// `ScriptedDiceRoller` factory to drive the engine deterministically.
-    /// `hopStepDuration`/`zoomSettleDuration` default to real animation
-    /// timings; tests pass `0` so `rollDice()` settles immediately instead
-    /// of waiting out the animation in real time.
     public init(
         cityDataProvider: CityDataProvider,
         assetProvider: AssetProvider = PlaceholderAssetProvider(),
-        makeDiceRoller: @escaping () -> DiceRoller = { SystemDiceRoller() },
-        hopStepDuration: TimeInterval = 0.22,
-        zoomSettleDuration: TimeInterval = 0.35
+        makeDiceRoller: @escaping () -> DiceRoller = { SystemDiceRoller() }
     ) {
         self.cityDataProvider = cityDataProvider
         self.assetProvider = assetProvider
         self.makeDiceRoller = makeDiceRoller
-        self.hopStepDuration = hopStepDuration
-        self.zoomSettleDuration = zoomSettleDuration
     }
 
     public var state: GameState? { engine?.state }
@@ -101,6 +92,21 @@ public final class GameViewModel: ObservableObject {
         pendingPurchaseTileID = nil
     }
 
+    /// Abandons the current game (if any) and returns to the city picker —
+    /// `GameRootView` shows it whenever `board`/`engine` are `nil`.
+    public func restartToCityPicker() {
+        objectWillChange.send()
+        board = nil
+        engine = nil
+        eventLog = []
+        pendingPurchaseTileID = nil
+        lastRoll = nil
+        animatingPlayerID = nil
+        animatedPosition = nil
+        cameraFocusTileID = nil
+        cityLoadMessage = nil
+    }
+
     // MARK: - Turn actions
 
     /// Rolls, applies the turn, then animates the token hopping tile-by-tile
@@ -109,7 +115,11 @@ public final class GameViewModel: ObservableObject {
     /// done. `pendingPurchaseTileID` (which drives the buy/skip prompt) is
     /// only published once the animation finishes, so the prompt doesn't
     /// appear before the token visually arrives.
-    public func rollDice() async {
+    ///
+    /// `hopStepDuration`/`zoomSettleDuration` default to a medium pace;
+    /// callers pass the user's chosen `AnimationSpeed` durations (or `0` in
+    /// tests, so this settles immediately instead of waiting in real time).
+    public func rollDice(hopStepDuration: TimeInterval = 0.22, zoomSettleDuration: TimeInterval = 0.35) async {
         guard let engine, animatingPlayerID == nil else { return }
         let playerIndex = engine.state.currentPlayerIndex
         let playerID = engine.state.players[playerIndex].id
@@ -133,11 +143,17 @@ public final class GameViewModel: ObservableObject {
             return
         }
 
-        await animateHop(playerID: playerID, from: startPosition, to: destination, tileCount: tileCount)
+        await animateHop(
+            playerID: playerID, from: startPosition, to: destination, tileCount: tileCount,
+            hopStepDuration: hopStepDuration, zoomSettleDuration: zoomSettleDuration
+        )
         pendingPurchaseTileID = engine.pendingPurchaseTileID
     }
 
-    private func animateHop(playerID: Player.ID, from: Int, to: Int, tileCount: Int) async {
+    private func animateHop(
+        playerID: Player.ID, from: Int, to: Int, tileCount: Int,
+        hopStepDuration: TimeInterval, zoomSettleDuration: TimeInterval
+    ) async {
         let path = Self.hopPath(from: from, to: to, tileCount: tileCount)
         guard !path.isEmpty else { return }
 
