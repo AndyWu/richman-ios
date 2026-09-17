@@ -101,15 +101,24 @@ final class RichmanGameUITests: XCTestCase {
         }
     }
 
-    func testRouteColorsAreDistinctForConsecutiveTilesAndStableForTheSameIndex() {
-        let colors = (0..<40).map { RouteGeometry.routeColor(forTileIndex: $0) }
+    func testRouteColorsGroupConsecutiveTilesIntoAHandfulOfLinesAndAreStable() {
+        let tileCount = 40
+        let lineCount = 8
+        let colors = (0..<tileCount).map { RouteGeometry.routeColor(forTileIndex: $0, tileCount: tileCount, lineCount: lineCount) }
+
         // Same index always yields the same color (deterministic, not random).
-        XCTAssertEqual(RouteGeometry.routeColor(forTileIndex: 17), colors[17])
-        // Consecutive indices (the common case — they're the ones drawn next
-        // to each other) must not resolve to the exact same color.
-        for index in 0..<(colors.count - 1) {
-            XCTAssertNotEqual(colors[index], colors[index + 1], "tiles \(index) and \(index + 1) got the same route color")
-        }
+        XCTAssertEqual(RouteGeometry.routeColor(forTileIndex: 17, tileCount: tileCount, lineCount: lineCount), colors[17])
+
+        // Merging routes means most consecutive tiles now share a color —
+        // there should be far fewer color changes than tiles (one "line"
+        // covers several stops), but still more than one (it's not a single
+        // color for the whole board).
+        let colorChanges = (0..<(colors.count - 1)).filter { colors[$0] != colors[$0 + 1] }.count
+        XCTAssertGreaterThan(colorChanges, 0, "the board shouldn't render as a single line")
+        XCTAssertLessThan(colorChanges, tileCount / 2, "routes should merge into a handful of lines, not alternate colors every tile")
+
+        // No more distinct colors than the requested line count.
+        XCTAssertLessThanOrEqual(Set(colors.map { $0.description }).count, lineCount)
     }
 
     func testIntermediateStopsAreEmptyForShortSegments() {

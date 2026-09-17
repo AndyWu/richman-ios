@@ -231,7 +231,7 @@ public struct BoardView: View {
             return RouteSegment(
                 id: index,
                 path: path,
-                color: RouteGeometry.routeColor(forTileIndex: index),
+                color: RouteGeometry.routeColor(forTileIndex: index, tileCount: points.count),
                 // About one tile-width of road between stops — with tiles
                 // now spaced at least a full chip-width apart (see
                 // `geoPositions`), this puts a stop on most legs instead of
@@ -387,15 +387,21 @@ enum RouteGeometry {
         return points
     }
 
-    /// A distinct, deterministic color per tile index, stepped by the golden
-    /// angle (≈137.5°) rather than dividing the wheel evenly — evenly-spaced
-    /// hues put *adjacent* indices close together on the wheel (e.g. 40 tiles
-    /// evenly spaced are only 9° apart), which is exactly the pair that ends
-    /// up next to each other on screen. The golden angle keeps consecutive
-    /// indices visually distinct no matter how many tiles there are.
-    static func routeColor(forTileIndex index: Int) -> Color {
+    /// Colors tiles into `lineCount` contiguous groups (in board order) and
+    /// gives every tile in a group the same color, so the map reads as a
+    /// handful of long "lines" threading through many stops — like a real
+    /// transit map — instead of a different color at every single hop
+    /// between adjacent tiles, which just looked like a tangle of dozens of
+    /// distinct routes. Group colors are stepped by the golden angle
+    /// (≈137.5°) rather than dividing the wheel evenly, so neighboring
+    /// groups (which is exactly the pair that ends up next to each other on
+    /// screen) stay visually distinct no matter how many groups there are.
+    static func routeColor(forTileIndex index: Int, tileCount: Int, lineCount: Int = 8) -> Color {
+        guard tileCount > 0 else { return Color(hue: 0, saturation: 0.55, brightness: 0.8) }
+        let groupCount = max(1, min(lineCount, tileCount))
+        let groupIndex = (index * groupCount) / tileCount
         let goldenAngle = 137.508
-        let hue = (Double(index) * goldenAngle).truncatingRemainder(dividingBy: 360) / 360
+        let hue = (Double(groupIndex) * goldenAngle).truncatingRemainder(dividingBy: 360) / 360
         return Color(hue: hue, saturation: 0.55, brightness: 0.8)
     }
 
