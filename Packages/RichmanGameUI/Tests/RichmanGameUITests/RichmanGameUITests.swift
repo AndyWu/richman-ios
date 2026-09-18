@@ -250,6 +250,15 @@ final class RichmanGameUITests: XCTestCase {
         XCTAssertEqual(GameViewModel.hopPath(from: 5, to: 5, tileCount: 40), [5], "landing back on the same tile still yields one step")
     }
 
+    func testFullLoopPathVisitsEveryOtherTileOnceAndEndsBackAtTheStart() {
+        let path = GameViewModel.fullLoopPath(startingAt: 5, tileCount: 40)
+
+        XCTAssertEqual(path.count, 40, "should take exactly one step per tile on the board")
+        XCTAssertEqual(path.last, 5, "a full loop ends back where it started")
+        XCTAssertEqual(Set(path.dropLast()), Set(0..<40).subtracting([5]), "every other tile should be visited exactly once")
+        XCTAssertEqual(path.first, 6, "should start by stepping forward, not backward")
+    }
+
     // MARK: - GameViewModel
 
     func testStartGameWithNoCityUsesStandardBoard() async {
@@ -348,6 +357,36 @@ final class RichmanGameUITests: XCTestCase {
         XCTAssertFalse(viewModel.isAnimatingMove)
         XCTAssertNotNil(viewModel.pendingPurchaseTileID, "the purchase prompt should only appear once the token has finished moving")
         XCTAssertEqual(viewModel.displayPlayers, viewModel.state?.players ?? [], "once settled, the displayed positions should match the real ones")
+    }
+
+    func testPreviewRouteReturnsToTheStartingTileWithoutChangingGameState() async {
+        let viewModel = GameViewModel(cityDataProvider: MockCityDataProvider())
+        await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
+        let positionBefore = viewModel.state?.players[0].position
+        let cashBefore = viewModel.state?.players[0].cash
+        let hadRolledBefore = viewModel.hasRolledThisTurn
+
+        await viewModel.previewRoute(hopStepDuration: 0, zoomSettleDuration: 0)
+
+        XCTAssertEqual(viewModel.state?.players[0].position, positionBefore, "a preview is purely visual — it shouldn't move the player for real")
+        XCTAssertEqual(viewModel.state?.players[0].cash, cashBefore, "no landing should be resolved (no rent/purchase/tax) during a preview")
+        XCTAssertEqual(viewModel.hasRolledThisTurn, hadRolledBefore, "a preview shouldn't consume the turn's roll")
+        XCTAssertNil(viewModel.cameraFocusTileID, "camera should be back at the overview once the preview finishes")
+        XCTAssertFalse(viewModel.isAnimatingMove)
+    }
+
+    func testPreviewRouteDoesNothingWhilePurchaseIsPending() async {
+        let viewModel = GameViewModel(
+            cityDataProvider: MockCityDataProvider(),
+            makeDiceRoller: { ScriptedDiceRoller(rolls: [DiceRoll(die1: 1, die2: 2)]) } // lands on a property tile
+        )
+        await viewModel.startGame(cityName: nil, playerNames: ["A", "B"])
+        await viewModel.rollDice(hopStepDuration: 0, zoomSettleDuration: 0)
+        XCTAssertNotNil(viewModel.pendingPurchaseTileID)
+
+        await viewModel.previewRoute(hopStepDuration: 0, zoomSettleDuration: 0)
+
+        XCTAssertFalse(viewModel.isAnimatingMove, "should have been a no-op, not left mid-animation")
     }
 
     func testRestartToCityPickerClearsGameState() async {

@@ -144,17 +144,36 @@ public final class GameViewModel: ObservableObject {
         }
 
         await animateHop(
-            playerID: playerID, from: startPosition, to: destination, tileCount: tileCount,
+            playerID: playerID, from: startPosition, path: Self.hopPath(from: startPosition, to: destination, tileCount: tileCount),
             hopStepDuration: hopStepDuration, zoomSettleDuration: zoomSettleDuration
         )
         pendingPurchaseTileID = engine.pendingPurchaseTileID
     }
 
+    /// Plays a continuous animation of the current player's token sweeping
+    /// all the way around the board — every other tile, in order — starting
+    /// and ending on whichever tile they're currently on, so a board's
+    /// whole route can be previewed at a glance. Purely visual: doesn't
+    /// roll, doesn't touch cash/turn state, and is a no-op while a real
+    /// move is already animating or a purchase is pending (same as
+    /// `rollDice`, so it can't be used to dodge either).
+    public func previewRoute(hopStepDuration: TimeInterval = 0.12, zoomSettleDuration: TimeInterval = 0.35) async {
+        guard let engine, animatingPlayerID == nil, pendingPurchaseTileID == nil, !engine.state.isGameOver else { return }
+        let playerIndex = engine.state.currentPlayerIndex
+        let playerID = engine.state.players[playerIndex].id
+        let start = engine.state.players[playerIndex].position
+        let tileCount = engine.state.board.tileCount
+
+        await animateHop(
+            playerID: playerID, from: start, path: Self.fullLoopPath(startingAt: start, tileCount: tileCount),
+            hopStepDuration: hopStepDuration, zoomSettleDuration: zoomSettleDuration
+        )
+    }
+
     private func animateHop(
-        playerID: Player.ID, from: Int, to: Int, tileCount: Int,
+        playerID: Player.ID, from: Int, path: [Int],
         hopStepDuration: TimeInterval, zoomSettleDuration: TimeInterval
     ) async {
-        let path = Self.hopPath(from: from, to: to, tileCount: tileCount)
         guard !path.isEmpty else { return }
 
         animatingPlayerID = playerID
@@ -194,6 +213,13 @@ public final class GameViewModel: ObservableObject {
             path.append(current)
         }
         return path
+    }
+
+    /// Every other tile in board order starting after `start`, ending back
+    /// on `start` — a full lap, for `previewRoute`.
+    static func fullLoopPath(startingAt start: Int, tileCount: Int) -> [Int] {
+        guard tileCount > 0 else { return [] }
+        return (1...tileCount).map { (start + $0) % tileCount }
     }
 
     public func buyPendingTile() {
