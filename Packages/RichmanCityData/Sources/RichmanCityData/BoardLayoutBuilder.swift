@@ -200,7 +200,12 @@ enum BoardLayoutBuilder {
     ) -> [Int: TileMapPosition] {
         guard positions.count > 1 else { return positions }
         var points = positions
-        let ids = Array(points.keys)
+        // Sorted, not just `Array(points.keys)` — Dictionary iteration order
+        // is randomized per process launch, and this repulsion pass is
+        // order-sensitive (which pair gets pushed first affects where
+        // everything settles), so an unsorted order made the same city's
+        // real coordinates lay out differently on every launch.
+        let ids = points.keys.sorted()
 
         for _ in 0..<iterations {
             var movedAny = false

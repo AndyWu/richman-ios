@@ -396,7 +396,7 @@ enum RouteGeometry {
     /// (≈137.5°) rather than dividing the wheel evenly, so neighboring
     /// groups (which is exactly the pair that ends up next to each other on
     /// screen) stay visually distinct no matter how many groups there are.
-    static func routeColor(forTileIndex index: Int, tileCount: Int, lineCount: Int = 8) -> Color {
+    static func routeColor(forTileIndex index: Int, tileCount: Int, lineCount: Int = 5) -> Color {
         guard tileCount > 0 else { return Color(hue: 0, saturation: 0.55, brightness: 0.8) }
         let groupCount = max(1, min(lineCount, tileCount))
         let groupIndex = (index * groupCount) / tileCount
