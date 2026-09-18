@@ -81,6 +81,34 @@ final class RichmanCityDataTests: XCTestCase {
         }
     }
 
+    func testMakeBoardProducesTheSameLayoutForTheSameInputEveryTime() {
+        // Regression test for a real bug: `decluttered` used to iterate
+        // `Array(points.keys)` over a `[Int: TileMapPosition]` — Dictionary
+        // iteration order depends on a per-process hash seed, so the same
+        // city's real coordinates could settle into a different declutter
+        // result on every app launch. Rebuilding from the same input,
+        // repeatedly, in the same process at least confirms the algorithm
+        // itself is a pure function of its input now that the iteration
+        // order is sorted rather than left to Dictionary's own ordering.
+        var places: [OverpassPlace] = []
+        for i in 0..<30 {
+            places.append(OverpassPlace(name: "Road \(i)", kind: .road(highwayClass: "primary"), latitude: Double(i) * 0.013, longitude: Double(i) * 0.021))
+        }
+        for i in 0..<5 {
+            places.append(OverpassPlace(name: "Station \(i)", kind: .station, latitude: Double(i) * 0.017, longitude: 0.03 - Double(i) * 0.004))
+        }
+        for i in 0..<3 {
+            places.append(OverpassPlace(name: "Landmark \(i)", kind: .landmark, latitude: 0.02 + Double(i) * 0.009, longitude: 0.025))
+        }
+
+        let boardA = BoardLayoutBuilder.makeBoard(center: (lat: 0.1, lon: 0.05), places: places)
+        let boardB = BoardLayoutBuilder.makeBoard(center: (lat: 0.1, lon: 0.05), places: places.shuffled())
+
+        for (tileA, tileB) in zip(boardA.tiles, boardB.tiles) {
+            XCTAssertEqual(tileA.mapPosition, tileB.mapPosition, "tile \(tileA.id) (\(tileA.name)) got a different position when the input order changed")
+        }
+    }
+
     func testMakeBoardInterpolatesPositionsForPaddedAndGenericTiles() {
         // Only 2 real roads and nothing else — every other tile (padded
         // properties/stations/utilities, plus every generic tile) must still
