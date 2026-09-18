@@ -29,7 +29,14 @@ public struct BoardView: View {
     let cameraFocusTileID: Int?
 
     private let geoTileSize: CGFloat = 38
-    private let routeThickness: CGFloat = 12
+    // Thinner than it used to be (was 12): where several long chords
+    // between board-order-adjacent-but-geographically-distant tiles happen
+    // to converge — a real-city board's tile order doesn't follow
+    // geographic proximity, so this is common near the middle of the
+    // canvas — thick strokes read as one dense, blurred-together knot.
+    // Thinner strokes keep each line legible on its own even where many of
+    // them cross in the same small area.
+    private let routeThickness: CGFloat = 6
     private let zoomedInScale: CGFloat = 2.4
     private let routeLineCount = 5
 
@@ -202,7 +209,14 @@ public struct BoardView: View {
         )
         // Center-to-center distance of 2x the chip size leaves a full
         // chip-width of clear edge-to-edge gap between any two chips.
-        return RouteGeometry.declutteredPositions(raw, minDistance: geoTileSize * 2, bounds: bounds)
+        let spaced = RouteGeometry.declutteredPositions(raw, minDistance: geoTileSize * 2, bounds: bounds)
+        // Declutter alone only spreads tiles enough to clear each other —
+        // it won't expand a cluster that has nowhere to grow into, which
+        // left the whole layout (and every route through it) crammed into
+        // a dense patch in the middle of the canvas with empty space
+        // around it. Stretch the settled cloud out to actually use the
+        // available canvas.
+        return RouteGeometry.fitToFill(spaced, in: bounds)
     }
 
     /// One drawable "line" per color group — every tile-to-tile leg in that
@@ -398,6 +412,36 @@ enum RouteGeometry {
             if !anyOverlap { break }
         }
         return points
+    }
+
+    /// Rescales `points` so their bounding box fills as much of `rect` as
+    /// possible (one uniform scale factor, so relative shape/angles are
+    /// preserved — no stretching one axis more than the other), centered
+    /// within it. `declutteredPositions` alone only guarantees a minimum
+    /// distance between points; it doesn't spread the whole cloud out to
+    /// use the space available. A cluster that declutter merely nudged
+    /// apart, with nowhere to expand into, can settle much smaller than the
+    /// canvas — crowding every tile's connecting route into a dense knot in
+    /// the middle while the edges of the board sit empty. Stretching the
+    /// settled cloud out to fill the canvas afterward fixes that directly,
+    /// regardless of why the cloud was small to begin with.
+    static func fitToFill(_ points: [CGPoint], in rect: CGRect) -> [CGPoint] {
+        guard let minX = points.map(\.x).min(), let maxX = points.map(\.x).max(),
+              let minY = points.map(\.y).min(), let maxY = points.map(\.y).max(),
+              rect.width > 0, rect.height > 0
+        else { return points }
+
+        let width = max(maxX - minX, 0.0001)
+        let height = max(maxY - minY, 0.0001)
+        let scale = min(rect.width / width, rect.height / height)
+        let scaledWidth = width * scale
+        let scaledHeight = height * scale
+        let xOffset = rect.minX + (rect.width - scaledWidth) / 2
+        let yOffset = rect.minY + (rect.height - scaledHeight) / 2
+
+        return points.map {
+            CGPoint(x: xOffset + ($0.x - minX) * scale, y: yOffset + ($0.y - minY) * scale)
+        }
     }
 
     /// Which of `lineCount` contiguous groups (in board order) a tile falls

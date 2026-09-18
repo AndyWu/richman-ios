@@ -208,6 +208,40 @@ final class RichmanGameUITests: XCTestCase {
         }
     }
 
+    func testFitToFillStretchesASmallClusterToUseTheWholeRect() {
+        // A tight cluster in the corner of a much bigger rect — this is what
+        // declutter alone leaves behind when a cluster has nowhere to
+        // expand into on its own.
+        let cluster = [CGPoint(x: 10, y: 10), CGPoint(x: 20, y: 10), CGPoint(x: 10, y: 20), CGPoint(x: 20, y: 20)]
+        let rect = CGRect(x: 0, y: 0, width: 400, height: 400)
+
+        let filled = RouteGeometry.fitToFill(cluster, in: rect)
+
+        let xs = filled.map(\.x), ys = filled.map(\.y)
+        let width = xs.max()! - xs.min()!, height = ys.max()! - ys.min()!
+        // The bounding box should now span nearly the whole rect on at
+        // least one axis (the cluster is square, same as the rect, so both).
+        XCTAssertGreaterThan(width, rect.width * 0.9, "cluster wasn't stretched to fill the available width")
+        XCTAssertGreaterThan(height, rect.height * 0.9, "cluster wasn't stretched to fill the available height")
+        for point in filled {
+            XCTAssertTrue(rect.insetBy(dx: -0.01, dy: -0.01).contains(point), "\(point) landed outside the rect")
+        }
+    }
+
+    func testFitToFillPreservesRelativeShapeWithOneUniformScale() {
+        // A cluster twice as wide as it is tall, fit into a square rect —
+        // a single scale factor (fit-to-smaller-axis) must be used for both
+        // axes, or the relative angles between points would distort.
+        let cluster = [CGPoint(x: 0, y: 0), CGPoint(x: 20, y: 0), CGPoint(x: 0, y: 10)]
+        let rect = CGRect(x: 0, y: 0, width: 100, height: 100)
+
+        let filled = RouteGeometry.fitToFill(cluster, in: rect)
+
+        let widthAfter = filled[1].x - filled[0].x
+        let heightAfter = filled[2].y - filled[0].y
+        XCTAssertEqual(widthAfter / heightAfter, 2.0, accuracy: 0.001, "aspect ratio should be preserved by a single uniform scale")
+    }
+
     // MARK: - GameViewModel.hopPath
 
     func testHopPathWalksForwardOneTileAtATimeWithWraparound() {
