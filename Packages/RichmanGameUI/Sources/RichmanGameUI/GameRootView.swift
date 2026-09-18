@@ -22,6 +22,9 @@ public struct GameRootView: View {
             // turn control bar's own trailing button ("End Turn") when a
             // game is in progress.
             HStack {
+                if let state = viewModel.state, !state.isGameOver {
+                    previewRouteButton
+                }
                 Spacer()
                 settingsButton
             }
@@ -56,6 +59,30 @@ public struct GameRootView: View {
         .padding(.trailing, 12)
         .padding(.top, 4)
         .accessibilityLabel("Settings")
+    }
+
+    /// Plays a preview animation of the current player's token sweeping all
+    /// the way around the board and back — a way to see a city's whole
+    /// route at a glance. Lives up here (not among the turn controls below)
+    /// since it's a board-preview utility, not a turn action.
+    private var previewRouteButton: some View {
+        Button {
+            Task {
+                await viewModel.previewRoute(
+                    hopStepDuration: settings.animationSpeed.hopStepDuration * 0.6,
+                    zoomSettleDuration: settings.animationSpeed.zoomSettleDuration
+                )
+            }
+        } label: {
+            Image(systemName: "map")
+                .font(.title3)
+                .padding(10)
+                .background(.regularMaterial, in: Circle())
+        }
+        .padding(.leading, 12)
+        .padding(.top, 4)
+        .disabled(viewModel.isAnimatingMove || viewModel.pendingPurchaseTileID != nil)
+        .accessibilityLabel("Preview route")
     }
 
     @ViewBuilder
