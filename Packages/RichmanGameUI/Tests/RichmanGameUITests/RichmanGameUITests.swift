@@ -121,6 +121,18 @@ final class RichmanGameUITests: XCTestCase {
         XCTAssertLessThanOrEqual(Set(colors.map { $0.description }).count, lineCount)
     }
 
+    func testLineGroupIndexIsContiguousAndCoversEveryGroup() {
+        let tileCount = 40
+        let lineCount = 5
+        let groups = (0..<tileCount).map { RouteGeometry.lineGroupIndex(forTileIndex: $0, tileCount: tileCount, lineCount: lineCount) }
+
+        // Every group index actually gets used...
+        XCTAssertEqual(Set(groups), Set(0..<lineCount))
+        // ...and group indices never decrease as the tile index increases
+        // (each group is one contiguous run of tiles, not scattered).
+        XCTAssertEqual(groups, groups.sorted())
+    }
+
     func testIntermediateStopsAreEmptyForShortSegments() {
         let stops = RouteGeometry.intermediateStops(
             from: CGPoint(x: 0, y: 0),

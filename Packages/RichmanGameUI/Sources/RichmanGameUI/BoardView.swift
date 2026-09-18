@@ -31,6 +31,7 @@ public struct BoardView: View {
     private let geoTileSize: CGFloat = 38
     private let routeThickness: CGFloat = 12
     private let zoomedInScale: CGFloat = 2.4
+    private let routeLineCount = 5
 
     public init(
         board: Board,
@@ -147,14 +148,14 @@ public struct BoardView: View {
             let (scale, offset) = zoomTransform(canvasSize: size, focusPoint: focusPoint)
 
             ZStack(alignment: .topLeading) {
-                ForEach(routeSegments(points: points)) { segment in
-                    segment.path.stroke(
-                        segment.color.opacity(0.55),
+                ForEach(routeLines(points: points)) { line in
+                    line.path.stroke(
+                        line.color.opacity(0.7),
                         style: StrokeStyle(lineWidth: routeThickness, lineCap: .round, lineJoin: .round)
                     )
-                    ForEach(Array(segment.stops.enumerated()), id: \.offset) { _, stop in
+                    ForEach(Array(line.stops.enumerated()), id: \.offset) { _, stop in
                         Circle()
-                            .fill(segment.color)
+                            .fill(line.color)
                             .overlay(Circle().stroke(Color.white, lineWidth: 1))
                             .frame(width: routeThickness * 0.7, height: routeThickness * 0.7)
                             .position(stop)
@@ -204,40 +205,52 @@ public struct BoardView: View {
         return RouteGeometry.declutteredPositions(raw, minDistance: geoTileSize * 2, bounds: bounds)
     }
 
-    /// One drawable piece of "road" per tile — the leg leaving that tile and
-    /// heading to the next one in board order (wrapping from the last tile
-    /// back to Go), each its own color so the route reads as a network of
-    /// distinct named streets (Tube-map style) rather than one long line.
-    private struct RouteSegment: Identifiable {
+    /// One drawable "line" per color group — every tile-to-tile leg in that
+    /// group combined into a single `Path` and stroked once. Legs used to
+    /// each get their own `Path` and their own `.stroke()` call, so wherever
+    /// two same-colored legs ran close together their separate translucent
+    /// strokes stacked and visibly darkened, reading as duplicate
+    /// overlapping routes. One combined path per group and one stroke pass
+    /// means the whole group reads as a single line at a uniform opacity,
+    /// however much its legs happen to run alongside each other on screen.
+    private struct RouteLine: Identifiable {
         let id: Int
         let path: Path
         let color: Color
         let stops: [CGPoint]
     }
 
-    private func routeSegments(points: [CGPoint]) -> [RouteSegment] {
+    private func routeLines(points: [CGPoint]) -> [RouteLine] {
         guard points.count == board.tiles.count else { return [] }
+        let tileCount = points.count
 
-        return points.indices.map { index in
+        var pathByGroup: [Int: Path] = [:]
+        var stopsByGroup: [Int: [CGPoint]] = [:]
+        var colorByGroup: [Int: Color] = [:]
+
+        for index in points.indices {
             let start = points[index]
             let end = points[(index + 1) % points.count]
+            let group = RouteGeometry.lineGroupIndex(forTileIndex: index, tileCount: tileCount, lineCount: routeLineCount)
 
-            var path = Path()
-            path.move(to: start)
+            var segmentPath = Path()
+            segmentPath.move(to: start)
             for waypoint in RouteGeometry.octilinearWaypoints(from: start, to: end) {
-                path.addLine(to: waypoint)
+                segmentPath.addLine(to: waypoint)
             }
-
-            return RouteSegment(
-                id: index,
-                path: path,
-                color: RouteGeometry.routeColor(forTileIndex: index, tileCount: points.count),
-                // About one tile-width of road between stops — with tiles
-                // now spaced at least a full chip-width apart (see
-                // `geoPositions`), this puts a stop on most legs instead of
-                // reserving them for unusually long real-world gaps.
-                stops: RouteGeometry.intermediateStops(from: start, to: end, spacing: geoTileSize * 1.1)
+            pathByGroup[group, default: Path()].addPath(segmentPath)
+            colorByGroup[group] = RouteGeometry.routeColor(forTileIndex: index, tileCount: tileCount, lineCount: routeLineCount)
+            // About one tile-width of road between stops — with tiles now
+            // spaced at least a full chip-width apart (see `geoPositions`),
+            // this puts a stop on most legs instead of reserving them for
+            // unusually long real-world gaps.
+            stopsByGroup[group, default: []].append(
+                contentsOf: RouteGeometry.intermediateStops(from: start, to: end, spacing: geoTileSize * 1.1)
             )
+        }
+
+        return pathByGroup.keys.sorted().map { group in
+            RouteLine(id: group, path: pathByGroup[group]!, color: colorByGroup[group]!, stops: stopsByGroup[group] ?? [])
         }
     }
 
@@ -387,6 +400,16 @@ enum RouteGeometry {
         return points
     }
 
+    /// Which of `lineCount` contiguous groups (in board order) a tile falls
+    /// into — e.g. tile 0 and tile 1 usually land in the same group, so
+    /// `BoardView` can combine their route legs into one path instead of
+    /// stroking each separately.
+    static func lineGroupIndex(forTileIndex index: Int, tileCount: Int, lineCount: Int) -> Int {
+        guard tileCount > 0 else { return 0 }
+        let groupCount = max(1, min(lineCount, tileCount))
+        return (index * groupCount) / tileCount
+    }
+
     /// Colors tiles into `lineCount` contiguous groups (in board order) and
     /// gives every tile in a group the same color, so the map reads as a
     /// handful of long "lines" threading through many stops — like a real
@@ -397,9 +420,7 @@ enum RouteGeometry {
     /// groups (which is exactly the pair that ends up next to each other on
     /// screen) stay visually distinct no matter how many groups there are.
     static func routeColor(forTileIndex index: Int, tileCount: Int, lineCount: Int = 5) -> Color {
-        guard tileCount > 0 else { return Color(hue: 0, saturation: 0.55, brightness: 0.8) }
-        let groupCount = max(1, min(lineCount, tileCount))
-        let groupIndex = (index * groupCount) / tileCount
+        let groupIndex = lineGroupIndex(forTileIndex: index, tileCount: tileCount, lineCount: lineCount)
         let goldenAngle = 137.508
         let hue = (Double(groupIndex) * goldenAngle).truncatingRemainder(dividingBy: 360) / 360
         return Color(hue: hue, saturation: 0.55, brightness: 0.8)
